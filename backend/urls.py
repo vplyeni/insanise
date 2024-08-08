@@ -17,6 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from django.conf.urls.static import static
+from rest_framework_swagger.views import get_swagger_view
+from drf_spectacular import generators
+from rest_framework import permissions
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),

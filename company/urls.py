@@ -10,5 +10,5 @@ router.register(r'teams', TeamViewSet)
 router.register(r'employees', EmployeeViewSet)
 
 urlpatterns = [
-    path('/', include(router.urls)),
+    path('', include(router.urls)),
 ]

@@ -1,8 +1,9 @@
 # myapp/views.py
 from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+
 from .models import Company, TargetGroup, Team, Employee
 from .serializers import CompanySerializer, TargetGroupSerializer, TeamSerializer, EmployeeSerializer
-
 
 class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
