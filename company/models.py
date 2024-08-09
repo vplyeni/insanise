@@ -82,6 +82,8 @@ class Employee(AbstractUser):
     department = models.CharField(max_length=100, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
 
+    is_manager = models.BooleanField(default=False)
+
     # ForeignKey fields
     company = models.ForeignKey(Company, null=True, blank=True,on_delete=models.CASCADE)
     target_group = models.ForeignKey(TargetGroup, null=True, blank=True, on_delete=models.SET_NULL)
