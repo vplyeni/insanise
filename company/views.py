@@ -1,7 +1,8 @@
 # myapp/views.py
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-
+from django.views import View
+from django.http import HttpResponse
 from .models import Company, TargetGroup, Team, Employee
 from .serializers import CompanySerializer, TargetGroupSerializer, TeamSerializer, EmployeeSerializer
 
@@ -23,3 +24,4 @@ class TeamViewSet(viewsets.ModelViewSet):
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
+

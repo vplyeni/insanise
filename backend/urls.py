@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.shortcuts import redirect
 
 from django.conf.urls.static import static
 from rest_framework_swagger.views import get_swagger_view
@@ -26,4 +27,6 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+
+    path('', lambda request: redirect('api/docs/swagger', permanent=True)),
 ]
