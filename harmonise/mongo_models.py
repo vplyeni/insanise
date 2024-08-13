@@ -4,7 +4,9 @@ from typing import List
 
 from conmongo.mongo_model import mongo_model
 
-
+"""
+Field
+"""
 class TaskFieldModel:
     id: str
     type: str
@@ -114,6 +116,9 @@ class FieldGetModel(FieldBaseModel):
         self.fields = fields
 
 
+"""
+Task
+"""
 class TaskBaseModel(mongo_model):
     name: str
     description: str

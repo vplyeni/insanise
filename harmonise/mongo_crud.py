@@ -151,6 +151,28 @@ def field_dict_to_model(old_field: dict):
     return old_model
 
 
+def get_field_dict_to_model(old_field: dict):
+    print("field_dict_to_model")
+    task_fields = []
+
+    for i in old_field.get("fields"):
+        task_field_dict = {}
+        if type(i) is str:
+            task_field_dict = ast.literal_eval(i)
+        else:
+            task_field_dict = i
+        task_field = TaskFieldModel(name=task_field_dict.get("name"),
+                                    content=task_field_dict.get("content"),
+                                    _type=task_field_dict.get("type"), _id=task_field_dict.get("id"))
+
+        task_fields.append(task_field)
+
+    old_model = FieldGetModel(_id=old_field.get("_id"), task_id=old_field.get("task_id"),
+                              user_id=old_field.get("user_id"), fields=task_fields,
+                              created_at=old_field.get("created_at"), updated_at=old_field.get("updated_at"))
+    return old_model
+
+
 def create_field(user_id: int, task_id: str, fields: List[TaskFieldModel]):
     field = FieldCreateModel(task_id=task_id, user_id=user_id, fields=fields)
     mongo_field.insert_one(field.to_dict())
@@ -202,6 +224,7 @@ def get_fields_by_user_id(user_id: str) -> List[FieldUpdateModel]:
 
     return fields
 
+
 def get_fields_by_user_id_task_id(user_id: int, task_id: str) -> List[FieldUpdateModel]:
     found_fields = list(mongo_field.find({"task_id": task_id, "user_id": user_id}))
     fields = [field_dict_to_model(i) for i in found_fields]
@@ -222,3 +245,10 @@ def delete_field(user_id: int, task_id: str):
 
     mongo_field.delete_one(document_to_delete)
     return
+
+
+def get_fields_by_user_id_skip_limit(user_id: int, skip: int, limit: int) -> List[FieldGetModel]:
+    found_fields = list(mongo_field.find({"user_id": user_id}).skip(skip).limit(limit))
+    fields = [get_field_dict_to_model(i) for i in found_fields]
+
+    return fields
