@@ -19,15 +19,16 @@ class TaskFieldModel:
             'content': self.content
         }
 
-    def __init__(self, name: str, _type: str, content: str = ""):
-        self.id = str(uuid.uuid4())
+    def __init__(self, name: str, _type: str, content: str = "", _id:str = str(uuid.uuid4())):
+        self.id = _id
         self.name = name
         self.type = _type
         self.content = content
 
+
 class FieldBaseModel(mongo_model):
     task_id: str
-    user_id: str
+    user_id: int
 
     created_at: str | None
     updated_at: str | None
@@ -40,10 +41,10 @@ class FieldBaseModel(mongo_model):
             'user_id': self.user_id,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
-            'fields': [str(i.to_dict()) for i in self.fields]
+            'fields': [field.to_dict() for field in self.fields]
         }
 
-    def __init__(self, task_id: str, user_id: str, fields: List[TaskFieldModel], created_at: str, updated_at: str):
+    def __init__(self, task_id: str, user_id: int, fields: List[TaskFieldModel], created_at: str, updated_at: str):
         super().__init__()
         self.task_id = task_id
         self.user_id = user_id
@@ -53,6 +54,15 @@ class FieldBaseModel(mongo_model):
 
 
 class FieldCreateModel(FieldBaseModel):
+    def __init__(self, task_id: str, user_id: int, fields: List[TaskFieldModel],
+                 created_at: str = str(datetime.datetime.now()), updated_at: str = str(datetime.datetime.now())):
+        super().__init__(task_id=task_id, user_id=user_id, fields=fields, created_at=created_at, updated_at=updated_at)
+        self.task_id = task_id
+        self.user_id = user_id
+        self.created_at = created_at
+        self.updated_at = updated_at
+        self.fields = fields
+
     pass
 
 
@@ -66,11 +76,11 @@ class FieldUpdateModel(FieldBaseModel):
             'user_id': self.user_id,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
-            'fields': [i.to_dict() for i in self.fields]
+            'fields': [field.to_dict() for field in self.fields]
         }
 
-    def __init__(self, _id: str, task_id: str, user_id: str, fields: List[TaskFieldModel], created_at: str,
-                 updated_at: str):
+    def __init__(self, _id: str, task_id: str, user_id: int, fields: List[TaskFieldModel], created_at: str,
+                 updated_at: str = str(datetime.datetime.now())):
         super().__init__(task_id=task_id, created_at=created_at, fields=fields, user_id=user_id, updated_at=updated_at)
         self._id = _id
         self.task_id = task_id
@@ -90,10 +100,10 @@ class FieldGetModel(FieldBaseModel):
             'user_id': self.user_id,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
-            'fields': [i.to_dict() for i in self.fields]
+            'fields': [field.to_dict() for field in self.fields]
         }
 
-    def __init__(self, _id: str, task_id: str, user_id: str, fields: List[TaskFieldModel], created_at: str,
+    def __init__(self, _id: str, task_id: str, user_id: int, fields: List[TaskFieldModel], created_at: str,
                  updated_at: str):
         super().__init__(task_id=task_id, created_at=created_at, fields=fields, user_id=user_id, updated_at=updated_at)
         self._id = _id

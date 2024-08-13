@@ -5,10 +5,28 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import permissions
 from .mongo_crud import (create_task, get_tasks_by_user_id, update_task, delete_task,
-                         create_or_update_field, get_fields_by_user_id_task_id_raw,
-                         get_fields_by_user_id_raw, delete_field)
+                         create_or_update_field, get_fields_by_user_id_task_id,
+                         get_fields_by_user_id, delete_field, update_field)
 from harmonise.serializers import NoOpSerializer
-from .mongo_models import TaskFieldModel
+from .mongo_models import TaskFieldModel, FieldCreateModel
+import json
+
+
+def mongo_to_task_field_model(mongo):
+    if mongo.get('id') is not None:
+        field = TaskFieldModel(_id=mongo.get('id'), name=mongo.get('name'), _type=mongo.get('type'),
+                               content=mongo.get('content'))
+        return field
+    else:
+        field = TaskFieldModel(name=mongo.get('name'), _type=mongo.get('type'),
+                               content=mongo.get('content'))
+        return field
+
+
+def mongo_to_field_model(mongo):
+    task_fields = [TaskFieldModel(**json.loads(i)) for i in mongo.get('fields')]
+    print(task_fields)
+    """field = FieldCreateModel(task_id=mongo.get('task_id'), user_id=mongo.get('user_id'), created_at=mongo.get('created_at'), updated_at=mongo.get('updated_at'), fields )"""
 
 
 class TaskListView(GenericAPIView):
@@ -162,8 +180,10 @@ class FieldView(GenericAPIView):
     serializer_class = NoOpSerializer
 
     def get(self, request, *args, **kwargs):
-        fields = get_fields_by_user_id_raw(str(request.user.id))
-        return Response(fields, status=status.HTTP_200_OK)
+        found_fields = get_fields_by_user_id(request.user.id)
+
+        return Response([found_field.to_dict() for found_field in found_fields], status=status.HTTP_200_OK)
+
     @extend_schema(
         request={
             'application/json': {
@@ -174,7 +194,6 @@ class FieldView(GenericAPIView):
                     'updated_at': {'type': 'string'},
                     'fields': {'type': 'array', 'items': {'type': 'object',
                                                           'properties': {
-                                                              'id': {'type': 'string'},
                                                               'type': {'type': 'string'},
                                                               'name': {'type': 'string'},
                                                               'content': {'type': 'string'},
@@ -216,11 +235,17 @@ class FieldView(GenericAPIView):
     def post(self, request, *args, **kwargs):
         task_id = request.data.get('task_id')
         try:
+            print([TaskFieldModel(name=i.get("name"), _type=i.get("type"),
+                                  content=i.get("content")).to_dict() for i in request.data.get('fields')])
+
             field = create_or_update_field(request.user.id, task_id,
-                                           [TaskFieldModel(name=i.name, _type=i.type, content=i.content) for i in request.data.get('fields')])
+                                           [TaskFieldModel(name=i.get("name"), _type=i.get("type"),
+                                                           content=i.get("content")) for i in
+                                            request.data.get('fields')])
             return Response(field.to_dict(), status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @extend_schema(
         request={
@@ -272,25 +297,34 @@ class FieldView(GenericAPIView):
         },
     )
     def put(self, request, *args, **kwargs):
+        """
+        TO-DO field multiple
+        """
         task_id = request.data.get('task_id')
         try:
-            field = create_or_update_field(request.user.id, task_id,
-                                           [TaskFieldModel(i.name, i.type, i.content) for i in request.data.get('fields')])
+            field = update_field(updater_user=request.user,user_id=request.user.id, task_id=task_id,
+                                 fields=[TaskFieldModel(_id=i.get("id"), name=i.get("name"), _type=i.get("type"),
+                                                        content=i.get("content")) for i in
+                                         request.data.get('fields')]
+                                 )
+
             return Response(field.to_dict(), status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 class FieldIdView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = NoOpSerializer
+
+
     def get(self, request, task_id, *args, **kwargs):
         try:
-            fields = get_fields_by_user_id_task_id_raw(user_id=str(request.user.id), task_id=task_id)
-            return Response(fields, status=status.HTTP_200_OK)
+            found_fields = get_fields_by_user_id_task_id(user_id=request.user.id, task_id=task_id)
+            return Response([found_field.to_dict() for found_field in found_fields], status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def delete(self, request, task_id, *args, **kwargs):
         try:
             field = delete_field(user_id=request.user.id, task_id=task_id)
