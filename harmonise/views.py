@@ -327,7 +327,7 @@ class FieldIdView(GenericAPIView):
 
     def delete(self, request, task_id, *args, **kwargs):
         try:
-            field = delete_field(user_id=request.user.id, task_id=task_id)
-            return Response({"deleted": field.to_dict()}, status=status.HTTP_200_OK)
+            delete_field(user_id=request.user.id, task_id=task_id)
+            return Response({"deleted"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -213,16 +213,12 @@ def get_field_by_task_id(task_id: str, user_id) -> List[TaskUpdateModel]:
     return field
 
 
-def delete_field(user_id: str, task_id: str):
+def delete_field(user_id: int, task_id: str):
     document_to_delete = {"task_id": task_id, "user_id": user_id}
 
     found_field = mongo_field.find_one(document_to_delete)
     if found_field is None:
         raise Exception("No document found with given _id")
 
-    field = FieldUpdateModel(_id=found_field.get("_id"), task_id=task_id, user_id=user_id,
-                             fields=[TaskFieldModel(i.name, i.type) for i in found_field.get('fields')],
-                             created_at=found_field.get('created_at'), updated_at=found_field.get('updated_at'))
-
     mongo_field.delete_one(document_to_delete)
-    return field
+    return
