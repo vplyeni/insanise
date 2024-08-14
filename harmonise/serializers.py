@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+
 class NoOpSerializer(serializers.Serializer):
     def to_representation(self, instance):
         # This method is used to convert the object instance to a dictionary of primitive datatypes.
@@ -16,3 +17,41 @@ class NoOpSerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         # Similarly, override update if necessary.
         return validated_data
+
+class TaskFieldTypeModelSerializer(serializers.Serializer):
+    name = serializers.CharField(required=True)
+    type = serializers.CharField(required=True)
+
+class TaskSerializer(serializers.Serializer):
+    name = serializers.CharField(required=True)
+    description = serializers.CharField(required=True)
+
+    created_at = serializers.DateTimeField(required=False)
+    updated_at = serializers.DateTimeField(required=False)
+
+    created_by = serializers.IntegerField(required=True)
+    updated_by = serializers.IntegerField(required=True)
+
+    status = serializers.CharField(required=True)
+    company_id = serializers.IntegerField(required=True)
+    assigned_to = serializers.ListField(child=serializers.IntegerField())
+    fields = TaskFieldTypeModelSerializer(many=True)
+
+class TaskFieldModelSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False)
+    name = serializers.CharField(required=True)
+    type = serializers.CharField(required=True)
+    content = serializers.CharField(required=True)
+
+
+class UserFieldSerializer(serializers.Serializer):
+    task_id = serializers.CharField(required=True)
+    user_id = serializers.IntegerField(required=True)
+    name = serializers.CharField(max_length=200, required=True)
+    description = serializers.CharField(max_length=200, required=True)
+    fields = TaskFieldModelSerializer(many=True)
+    status = serializers.CharField(required=True)
+    company_id = serializers.IntegerField(required=True)
+    updated_by = serializers.IntegerField(required=True)
+    created_by = serializers.IntegerField(required=True)
+
