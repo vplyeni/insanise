@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from mongoengine import connect, Document, StringField, IntField, EmbeddedDocument, ListField, EmbeddedDocumentField, \
@@ -7,12 +8,16 @@ connect("insanise")
 
 
 class TaskFieldTypeModel(EmbeddedDocument):
-    id = StringField(required=True, unique=True)
     name = StringField(required=True)
     type = StringField(required=True)
 
+    meta = {
+        'allow_inheritance': True
+    }
+
 
 class TaskFieldModel(TaskFieldTypeModel):
+    id = StringField(default=uuid.uuid4(),required=True, unique=True)
     content = StringField(required=True)
 
 
@@ -25,7 +30,7 @@ class Task(Document):
     updated_at = DateTimeField(default=datetime.now)
 
     created_by = IntField(required=True)
-    updated_by = StringField(required=True)
+    updated_by = IntField(required=True)
     status = StringField(required=True)
 
     company_id = IntField(required=True)
