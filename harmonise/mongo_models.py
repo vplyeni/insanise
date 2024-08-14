@@ -7,10 +7,27 @@ from conmongo.mongo_model import mongo_model
 """
 Field
 """
-class TaskFieldModel:
+
+class TaskFieldType(mongo_model):
     id: str
     type: str
     name: str
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'type': self.type,
+        }
+
+    def __init__(self, name: str, _type: str, _id: str = str(uuid.uuid4())):
+        super().__init__()
+        self.id = _id
+        self.name = name
+        self.type = _type
+
+
+class TaskFieldModel(TaskFieldType):
     content: str
 
     def to_dict(self):
@@ -21,7 +38,8 @@ class TaskFieldModel:
             'content': self.content
         }
 
-    def __init__(self, name: str, _type: str, content: str = "", _id:str = str(uuid.uuid4())):
+    def __init__(self, name: str, _type: str, content: str = "", _id: str = str(uuid.uuid4())):
+        super().__init__()
         self.id = _id
         self.name = name
         self.type = _type
@@ -119,6 +137,8 @@ class FieldGetModel(FieldBaseModel):
 """
 Task
 """
+
+
 class TaskBaseModel(mongo_model):
     name: str
     description: str

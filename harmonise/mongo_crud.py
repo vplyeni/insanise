@@ -47,6 +47,18 @@ def get_tasks_by_user_id(user_id: str) -> List[TaskGetModel]:
 
     return list(tasks)
 
+def get_tasks_by_user_id_skip_limit(user_id: str,skip:int = 0,limit:int = 5) -> (List[TaskGetModel], int):
+    db_tasks = list(mongo_task.find({"user_ids": user_id}).skip(skip).limit(limit))
+    count = mongo_task.count_documents({"user_ids": user_id})
+    tasks = []
+
+    for task in db_tasks:
+        task['_id'] = str(task['_id'])
+        del task['user_ids']
+        tasks.append(task)
+
+    return (list(tasks) , count )
+
 
 def update_task(updater_user, _id: str, name: str, description: str, fields: List[TaskFieldModel],
                 user_ids: List[str]) -> TaskUpdateModel:

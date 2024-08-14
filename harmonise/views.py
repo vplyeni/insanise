@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework import permissions
 from .mongo_crud import (create_task, get_tasks_by_user_id, update_task, delete_task,
                          create_or_update_field, get_fields_by_user_id_task_id,
-                         get_fields_by_user_id, delete_field, update_field)
+                         get_fields_by_user_id, delete_field, update_field, get_tasks_by_user_id_skip_limit)
 from harmonise.serializers import NoOpSerializer
 from .mongo_models import TaskFieldModel, FieldCreateModel
 import json
@@ -34,6 +34,11 @@ class TaskListView(GenericAPIView):
     serializer_class = NoOpSerializer
 
     @extend_schema(
+        parameters=[
+            OpenApiParameter(name='skip', description='Number of items to skip', required=True, type=OpenApiTypes.INT),
+            OpenApiParameter(name='limit', description='Maximum number of items to return', required=True,
+                             type=OpenApiTypes.INT),
+        ],
         responses={
             200: OpenApiResponse(
                 description="Task get successfully",
@@ -67,14 +72,25 @@ class TaskListView(GenericAPIView):
     def get(self, request, *args, **kwargs):
         user_id = request.user.id
 
+        skip = 0
+        limit = 0
+
+        try:
+            skip = int(request.query_params.get('skip'))
+            limit = int(request.query_params.get('limit'))
+            print(skip, limit)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
         if not user_id:
             return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             user_id = str(user_id)
-            tasks = get_tasks_by_user_id(user_id)
+            tasks, count = get_tasks_by_user_id_skip_limit(user_id, skip, limit)
 
             print(tasks)
-            return Response({'tasks': tasks}, status=status.HTTP_200_OK)
+            return Response({'data': tasks, 'count':count}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
