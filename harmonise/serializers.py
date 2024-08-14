@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+
 class NoOpSerializer(serializers.Serializer):
     def to_representation(self, instance):
         # This method is used to convert the object instance to a dictionary of primitive datatypes.
@@ -17,10 +18,10 @@ class NoOpSerializer(serializers.Serializer):
         # Similarly, override update if necessary.
         return validated_data
 
+
 class TaskSerializer(serializers.Serializer):
     name = serializers.CharField()
     description = serializers.CharField()
-
 
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
@@ -33,3 +34,20 @@ class TaskSerializer(serializers.Serializer):
     company_id = serializers.IntegerField()
 
     assigned_to = serializers.ListField(child=serializers.IntegerField())
+
+
+class TaskFieldModelSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False)
+    name = serializers.CharField(required=True)
+    type = serializers.CharField(required=True)
+    content = serializers.CharField(required=True)
+
+
+class UserFieldSerializer(serializers.Serializer):
+    task_id = serializers.CharField(required=True)
+    user_id = serializers.IntegerField(required=True)
+    name = serializers.CharField(max_length=200, required=True)
+    description = serializers.CharField(max_length=200, required=True)
+    fields = TaskFieldModelSerializer(many=True)
+    status = serializers.CharField(required=True)
+    company_id = serializers.IntegerField(required=True)
