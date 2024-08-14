@@ -7,7 +7,7 @@ from rest_framework import permissions
 from .mongo_crud import (create_task, get_tasks_by_user_id, update_task, delete_task,
                          create_or_update_field, get_fields_by_user_id_task_id,
                          get_fields_by_user_id, delete_field, update_field, get_tasks_by_user_id_skip_limit)
-from harmonise.serializers import NoOpSerializer
+from harmonise_deprecated.serializers import NoOpSerializer
 from .mongo_models import TaskFieldModel, FieldCreateModel
 import json
 
