@@ -11,7 +11,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 
 from mongocon.mongo_models import Task, TaskFieldModel, TaskFieldTypeModel, UserField
-from .serializers import NoOpSerializer, UserFieldSerializer
+from .serializers import NoOpSerializer, UserFieldSerializer, TaskSerializer
 
 import json
 
@@ -43,51 +43,35 @@ import json
 )
 class UserFieldListView(GenericAPIView):
     permission_classes = (permissions.IsAuthenticated,)
-    serializer_class = NoOpSerializer
+    serializer_class = UserFieldSerializer
 
     def post(self, request, *args, **kwargs):
-        related_task = Task.objects(id=ObjectId(request.data.get('task_id')),
-                                    assigned_to__contains=request.user.id).count()
-        related_field = UserField.objects(task_id=request.data.get('task_id'), user_id=request.user.id).count()
+        try:
+            related_task = Task.objects(id=ObjectId(request.data.get('task_id')),
+                                        assigned_to__contains=request.user.id).count()
+            related_field = UserField.objects(task_id=request.data.get('task_id'), user_id=request.user.id).count()
 
-        if related_field > 0:
-            return Response("Task already exists", status=status.HTTP_400_BAD_REQUEST)
-        if related_task == 0:
-            return Response("Related task is not found or not assigned to this person.",
-                            status=status.HTTP_400_BAD_REQUEST)
-        print(1)
+            if related_field > 0:
+                return Response("Task already exists", status=status.HTTP_400_BAD_REQUEST)
+            if related_task == 0:
+                return Response("Related task is not found or not assigned to this person.",
+                                status=status.HTTP_400_BAD_REQUEST)
+            data = request.data
+            data["user_id"] = request.user.id
+            data["created_by"] = request.user.id
+            data["updated_by"] = request.user.id
+            data["company_id"] = request.user.company_id
+            data["status"] = "not_complete"
 
-        fields = [
-            {
-                "id": str(uuid.uuid4()),
-                "name": i.get("name"),
-                "type": i.get("type"),
-                "content": i.get("content"),
-            }
-
-            for i in request.data.get('fields')
-        ]
-
-        print(2)
-        user_field = UserField(
-            task_id=request.data.get('task_id'),
-            user_id=request.user.id,
-
-            name=request.data.get('name'),
-            description=request.data.get('description'),
-
-            fields=fields,
-
-            created_by=request.user.id,
-            updated_by=request.user.id,
-
-            status="not_complete",
-            company_id=request.user.company_id,
-        )
-        print(3)
-        user_field.save()
-        print(4)
-        return Response(json.loads(user_field.to_json()), status=status.HTTP_201_CREATED)
+            serializer = UserFieldSerializer(data=data)
+            if serializer.is_valid(raise_exception=True):
+                user_field = UserField(**serializer.validated_data)
+                user_field.save()
+                return Response(json.loads(user_field.to_json()), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                "error": str(e),
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserFieldDetailView(GenericAPIView):
@@ -164,11 +148,10 @@ class UserFieldDetailView(GenericAPIView):
         description="Update a UserField instance",
     )
     def put(self, request, task_id, *args, **kwargs):
-        print(3)
         try:
             user_field = UserField.objects.get(task_id=task_id,user_id=request.user.id)
             serializer = UserFieldSerializer(data=request.data)
-            if serializer.is_valid():
+            if serializer.is_valid(raise_exception=True):
                 user_field.update(**serializer.validated_data)
                 user_field.reload()  # Refresh the document with updated data
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -197,7 +180,7 @@ class UserFieldDetailView(GenericAPIView):
 
 class TaskListView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = NoOpSerializer
+    serializer_class = TaskSerializer
 
     @extend_schema(
         request={
@@ -241,29 +224,18 @@ class TaskListView(GenericAPIView):
     )
     def post(self, request, *args, **kwargs):
         try:
-            fields = [TaskFieldTypeModel(
-                name=i.get("name"),
-                type=i.get("type"),
-            ) for i in request.data.get('fields')]
+            data = request.data
+            data["created_by"] = request.user.id
+            data["updated_by"] = request.user.id
+            data["company_id"] = request.user.company_id
+            data["status"] = "new"
 
-            assigned_to = [int(i) for i in request.data.get('assigned_to')]
-
-            task = Task(name=request.data.get('name'),
-                        description=request.data.get('description'),
-
-                        fields=fields,
-                        assigned_to=assigned_to,
-
-                        created_by=request.user.id,
-                        updated_by=request.user.id,
-
-                        company_id=request.user.company_id,
-                        status="new"
-                        )
-            task.save()
-
-            return Response(json.loads(task.to_json())
-                            , status=status.HTTP_201_CREATED)
+            serializer = self.serializer_class(data=data)
+            if serializer.is_valid(raise_exception=True):
+                task = Task(**serializer.validated_data)
+                task.save()
+                return Response(json.loads(task.to_json())
+                                , status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -315,8 +287,64 @@ class TaskView(GenericAPIView):
 
         return Response("Task deleted successfully", status=status.HTTP_200_OK)
 
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'name': {'type': 'string'},
+                    'description': {'type': 'string'},
+                    'fields': {'type': 'array', 'items':
+                        {
+                            'type': 'object',
+                            'properties': {
+                                'name': {'type': 'string'},
+                                'type': {'type': 'string'},
+                            }
+                        }
+                               },
+                    'assigned_to': {'type': 'array', 'items': {'type': 'integer'}}
+                },
+                'required': ['name', 'description', 'fields', 'user_ids'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(
+                description="Task created successfully",
+                examples={
+                    'application/json': {
+                        'task': {
+                            'id': 'string',
+                            'name': 'string',
+                            'description': 'string',
+                            'fields': [
+                                {'type': 'string', 'name': 'string'}
+                            ],
+                        }
+                    }
+                }
+            ),
+            500: OpenApiResponse(description="Internal Server Error"),
+        },
+    )
     def put(self, request, _id, *args, **kwargs):
         if not request.user.is_manager:
             return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
 
-        return Response("TODO", status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        try:
+            task = Task.objects.get(id=_id)
+            data = request.data
+            data["updated_by"] = request.user.id
+            data["updated_at"] = datetime.datetime.now()
+            data["created_by"] = task.created_by
+            data["created_at"] = task.created_at
+
+            serializer = TaskSerializer(data=data)
+            if serializer.is_valid(raise_exception=True):
+                task.update(**serializer.validated_data)
+                task.reload()  # Refresh the document with updated data
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except DoesNotExist:
+            return Response({"error": "UserField not found"}, status=status.HTTP_404_NOT_FOUND)
+
