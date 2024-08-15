@@ -1,16 +1,16 @@
 import datetime
-import uuid
 
 from bson import ObjectId
-from django.shortcuts import render
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParameter
+from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParameter, extend_schema_serializer
 from mongoengine import DoesNotExist
-from rest_framework import permissions, status
+from rest_framework import permissions, status, renderers
 from rest_framework.generics import GenericAPIView
+from rest_framework.parsers import MultiPartParser, FileUploadParser
 from rest_framework.response import Response
 
 from mongocon.mongo_models import Task, TaskFieldModel, TaskFieldTypeModel, UserField
+from .models import File
 from .serializers import NoOpSerializer, UserFieldSerializer, TaskSerializer, FileSerializer
 
 import json
@@ -18,33 +18,37 @@ import json
 
 # Create your views here.
 
-@extend_schema(
-    request={
-        'application/json': {
-            'type': 'object',
-            'properties': {
-                'task_id': {'type': 'string'},
-                'name': {'type': 'string'},
-                'description': {'type': 'string'},
-                'fields': {'type': 'array', 'items':
-                    {
-                        'type': 'object',
-                        'properties': {
-                            'name': {'type': 'string'},
-                            'type': {'type': 'string'},
-                            'content': {'type': 'string'},
-                        }
-                    }
-                           },
-            },
-            'required': ['name', 'description', 'fields'],
-        },
-    }
-)
+
 class UserFieldListView(GenericAPIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = UserFieldSerializer
+    parser_classes = (MultiPartParser,FileUploadParser)
+    renderer_classes = (renderers.JSONRenderer,)
 
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'task_id': {'type': 'string'},
+                    'name': {'type': 'string'},
+                    'description': {'type': 'string'},
+                    'fields': {'type': 'array', 'items':
+                        {
+                            'type': 'object',
+                            'properties': {
+                                'name': {'type': 'string'},
+                                'type': {'type': 'string'},
+                                'content': {'type': 'string'},
+                            }
+                        }
+                               },
+                },
+                'required': ['name', 'description', 'fields'],
+            },
+        }
+    )
     def post(self, request, *args, **kwargs):
         try:
             related_task = Task.objects(id=ObjectId(request.data.get('task_id')),
@@ -352,11 +356,21 @@ class FileView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = FileSerializer
 
+
     def post(self, request, *args, **kwargs):
         try:
+            data = request.data
+            data["company_id"] = request.user.company_id
+            data["created_by"] = request.user.id
+            data["updated_by"] = request.user.id
+
             serializer = self.serializer_class(data=request.data)
             if serializer.is_valid(raise_exception=True):
-                serializer.save()
+                file_field = File(**serializer.validated_data)
+                file_field.save()
+                file_field.url = file_field.file.url
+                file_field.name = file_field.file.name
+                file_field.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

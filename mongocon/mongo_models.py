@@ -35,7 +35,11 @@ class Task(Document):
     company_id = IntField(required=True)
 
     assigned_to = ListField(IntField())
+"""
+TODO:
 
+isimler
+"""
 
 class UserField(Document):
     task_id = StringField(required=True)
