@@ -11,7 +11,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 
 from mongocon.mongo_models import Task, TaskFieldModel, TaskFieldTypeModel, UserField
-from .serializers import NoOpSerializer, UserFieldSerializer, TaskSerializer
+from .serializers import NoOpSerializer, UserFieldSerializer, TaskSerializer, FileSerializer
 
 import json
 
@@ -149,7 +149,7 @@ class UserFieldDetailView(GenericAPIView):
     )
     def put(self, request, task_id, *args, **kwargs):
         try:
-            user_field = UserField.objects.get(task_id=task_id,user_id=request.user.id)
+            user_field = UserField.objects.get(task_id=task_id, user_id=request.user.id)
             serializer = UserFieldSerializer(data=request.data)
             if serializer.is_valid(raise_exception=True):
                 user_field.update(**serializer.validated_data)
@@ -175,7 +175,6 @@ class UserFieldDetailView(GenericAPIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         return Response(json.loads(related_field.to_json()), status=status.HTTP_200_OK)
-
 
 
 class TaskListView(GenericAPIView):
@@ -348,3 +347,14 @@ class TaskView(GenericAPIView):
         except DoesNotExist:
             return Response({"error": "UserField not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+class FileView(GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = FileSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

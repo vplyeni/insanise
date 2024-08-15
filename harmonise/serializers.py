@@ -1,5 +1,8 @@
 from rest_framework import serializers
 
+from company.models import Company
+from harmonise.models import File
+
 
 class NoOpSerializer(serializers.Serializer):
     def to_representation(self, instance):
@@ -18,9 +21,11 @@ class NoOpSerializer(serializers.Serializer):
         # Similarly, override update if necessary.
         return validated_data
 
+
 class TaskFieldTypeModelSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
     type = serializers.CharField(required=True)
+
 
 class TaskSerializer(serializers.Serializer):
     name = serializers.CharField(required=True)
@@ -36,6 +41,7 @@ class TaskSerializer(serializers.Serializer):
     company_id = serializers.IntegerField(required=True)
     assigned_to = serializers.ListField(child=serializers.IntegerField())
     fields = TaskFieldTypeModelSerializer(many=True)
+
 
 class TaskFieldModelSerializer(serializers.Serializer):
     id = serializers.CharField(required=False)
@@ -55,3 +61,8 @@ class UserFieldSerializer(serializers.Serializer):
     updated_by = serializers.IntegerField(required=True)
     created_by = serializers.IntegerField(required=True)
 
+
+class FileSerializer(serializers.Serializer):
+    class Meta:
+        model = File
+        fields = '__all__'
