@@ -1,7 +1,5 @@
 from django.db import models
 from company.models import Company, Employee
-from harmonise.storage import HarmoniseS3Boto3Storage
-
 
 # Create your models here.
 class File(models.Model):
@@ -17,9 +15,4 @@ class File(models.Model):
     updated_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='files_updated')
     user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='files_user')
 
-    url = models.CharField(default="", max_length=255)
-
-    file = models.FileField(upload_to='./',
-                            storage=HarmoniseS3Boto3Storage,
-                            blank=True,
-                            null=True)
+    file = models.FileField()

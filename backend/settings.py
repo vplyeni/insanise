@@ -29,7 +29,6 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'storages',
     'company',
     'harmonise',
     'mongocon',
@@ -123,24 +122,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
-
-# Local S3 configurations
-AWS_ACCESS_KEY_ID = 'minioadmin'  # Replace with your local S3 key
-AWS_SECRET_ACCESS_KEY = 'minioadmin'  # Replace with your local S3 secret
-AWS_STORAGE_BUCKET_NAME = 'your-bucket-name'
-AWS_S3_REGION_NAME = 'us-east-1'  # This is default; change if necessary
-
-# Point to local S3 service
-AWS_S3_ENDPOINT_URL = 'http://localhost:9000'  # MinIO endpoint
-# AWS_S3_ENDPOINT_URL = 'http://localhost:4566'  # LocalStack endpoint
-
-AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = None
-AWS_QUERYSTRING_AUTH = False
-AWS_S3_CUSTOM_DOMAIN = None
-
-# Set up S3 as the default storage backend
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
