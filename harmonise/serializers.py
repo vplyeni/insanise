@@ -28,6 +28,7 @@ class TaskFieldTypeModelSerializer(serializers.Serializer):
 
 
 class TaskSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
     name = serializers.CharField(required=True)
     description = serializers.CharField(required=True)
 
@@ -42,6 +43,11 @@ class TaskSerializer(serializers.Serializer):
     assigned_to = serializers.ListField(child=serializers.IntegerField())
     fields = TaskFieldTypeModelSerializer(many=True)
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        del ret["assigned_to"]
+        return ret
+
 
 class TaskFieldModelSerializer(serializers.Serializer):
     id = serializers.CharField(required=False)
@@ -50,7 +56,7 @@ class TaskFieldModelSerializer(serializers.Serializer):
     content = serializers.CharField(required=True)
 
 
-class UserFieldSerializer(serializers.Serializer):
+class TaskUserSerializer(serializers.Serializer):
     task_id = serializers.CharField(required=True)
     user_id = serializers.IntegerField(required=True)
     name = serializers.CharField(max_length=200, required=True)

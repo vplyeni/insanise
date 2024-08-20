@@ -8,6 +8,7 @@ connect("insanise")
 
 
 class TaskFieldTypeModel(EmbeddedDocument):
+    id = StringField(default=lambda: str(uuid.uuid4()))
     name = StringField(required=True)
     type = StringField(required=True)
 
@@ -27,6 +28,8 @@ class Task(Document):
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
 
+    due_date = DateTimeField(required=True)
+
     created_by = IntField(required=True)
     updated_by = IntField(required=True)
 
@@ -41,7 +44,7 @@ TODO:
 isimler
 """
 
-class UserField(Document):
+class TaskUser(Document):
     task_id = StringField(required=True)
     user_id = IntField(required=True)
 
