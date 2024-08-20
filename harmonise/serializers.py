@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from rest_framework import serializers
 
 from company.models import Company
@@ -23,6 +25,7 @@ class NoOpSerializer(serializers.Serializer):
 
 
 class TaskFieldTypeModelSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True, required=False)
     name = serializers.CharField(required=True)
     type = serializers.CharField(required=True)
 
@@ -43,10 +46,46 @@ class TaskSerializer(serializers.Serializer):
     assigned_to = serializers.ListField(child=serializers.IntegerField())
     fields = TaskFieldTypeModelSerializer(many=True)
 
+    due_date = serializers.DateTimeField(required=True, format='%d-%m-%Y')
+
+    def to_representation(self, instance):
+        """
+        Convert the model instance to a dictionary of primitive datatypes.
+        """
+        ret = super().to_representation(instance)
+        # Use the custom method to get the formatted date
+        ret['due_date'] = instance.get_due_date()
+        return ret
+
+    def to_internal_value(self, data):
+        """
+        Convert the primitive data to a dictionary suitable for creating/updating a model.
+        """
+        # Convert the string to a datetime object before passing it to the model
+        data['due_date'] = datetime.strptime(data['due_date'], '%d-%m-%Y')
+        return super().to_internal_value(data)
+
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         del ret["assigned_to"]
         return ret
+
+
+class TaskAllSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    name = serializers.CharField(required=True)
+    description = serializers.CharField(required=True)
+
+    created_at = serializers.DateTimeField(required=False)
+    updated_at = serializers.DateTimeField(required=False)
+
+    created_by = serializers.IntegerField(required=True)
+    updated_by = serializers.IntegerField(required=True)
+
+    status = serializers.CharField(required=True)
+    company_id = serializers.IntegerField(required=True)
+    assigned_to = serializers.ListField(child=serializers.IntegerField())
+    fields = TaskFieldTypeModelSerializer(many=True)
 
 
 class TaskFieldModelSerializer(serializers.Serializer):

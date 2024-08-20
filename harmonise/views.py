@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from company.models import Company
 from mongocon.mongo_models import Task, TaskFieldModel, TaskFieldTypeModel, TaskUser
 from .models import File
-from .serializers import NoOpSerializer, TaskUserSerializer, TaskSerializer, FileSerializer
+from .serializers import NoOpSerializer, TaskUserSerializer, TaskSerializer, FileSerializer, TaskAllSerializer
 
 import json
 
@@ -26,9 +26,8 @@ import json
 class TaskUserListView(GenericAPIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = TaskUserSerializer
-    parser_classes = (MultiPartParser,FileUploadParser)
+    parser_classes = (MultiPartParser, FileUploadParser)
     renderer_classes = (renderers.JSONRenderer,)
-
 
     @extend_schema(
         request={
@@ -71,7 +70,7 @@ class TaskUserListView(GenericAPIView):
             data["company_id"] = request.user.company_id
             data["status"] = "not_complete"
 
-            serializer = TaskUserSerializer(data=data)
+            serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
                 user_field = TaskUser(**serializer.validated_data)
                 user_field.save()
@@ -158,7 +157,7 @@ class TaskUserDetailView(GenericAPIView):
     def put(self, request, task_id, *args, **kwargs):
         try:
             user_field = TaskUser.objects.get(task_id=task_id, user_id=request.user.id)
-            serializer = TaskUserSerializer(data=request.data)
+            serializer = self.serializer_class(data=request.data)
             if serializer.is_valid(raise_exception=True):
                 user_field.update(**serializer.validated_data)
                 user_field.reload()  # Refresh the document with updated data
@@ -240,8 +239,7 @@ class TaskListView(GenericAPIView):
             if serializer.is_valid(raise_exception=True):
                 task = Task(**serializer.validated_data)
                 task.save()
-                return Response(json.loads(task.to_json())
-                                , status=status.HTTP_201_CREATED)
+                return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -266,7 +264,7 @@ class TaskListView(GenericAPIView):
             tasks = Task.objects(assigned_to__contains=request.user.id)[skip:limit + skip]
             count = Task.objects(assigned_to__contains=request.user.id).count()
 
-            serialized_tasks = TaskSerializer(tasks, many=True)
+            serialized_tasks = self.serializer_class(tasks, many=True)
 
             return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
         except Exception as e:
@@ -346,7 +344,7 @@ class TaskView(GenericAPIView):
             data["created_by"] = task.created_by
             data["created_at"] = task.created_at
 
-            serializer = TaskSerializer(data=data)
+            serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
                 task.update(**serializer.validated_data)
                 task.reload()  # Refresh the document with updated data
@@ -354,6 +352,41 @@ class TaskView(GenericAPIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
             return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class AllTasksView(GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TaskAllSerializer
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='skip', description='Number of items to skip', required=True, type=OpenApiTypes.INT),
+            OpenApiParameter(name='limit', description='Maximum number of items to return', required=True,
+                             type=OpenApiTypes.INT),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        skip = 0
+        limit = 0
+
+        if not request.user.is_manager:
+            return Response("User is not a manager", status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            skip = int(request.query_params.get('skip'))
+            limit = int(request.query_params.get('limit'))
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tasks = Task.objects()[skip:limit + skip]
+            count = Task.objects().count()
+
+            serialized_tasks = self.serializer_class(tasks, many=True)
+
+            return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class FileView(GenericAPIView):
@@ -384,7 +417,8 @@ class FileView(GenericAPIView):
             if (task_id == "") or (field_id == ""):
                 return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
-            file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id, is_updated=False).first()
+            file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
+                                       is_updated=False).first()
 
             if file is None:
                 up_file = request.FILES['file']
@@ -394,7 +428,6 @@ class FileView(GenericAPIView):
                 with open(destination_path, 'wb+') as destination:
                     for chunk in up_file.chunks():
                         destination.write(chunk)
-
 
                 """
                 
@@ -467,12 +500,13 @@ class FileView(GenericAPIView):
 
         """
 
-        file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id, is_updated=False).first()
+        file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
+                                   is_updated=False).first()
 
         if file is None:
             return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        return FileResponse(open("/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/"+file.name, 'rb'))
+        return FileResponse(open("/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/" + file.name, 'rb'))
 
     def delete(self, request, *args, **kwargs):
         task_id = str(request.query_params.get('task_id'))
@@ -483,7 +517,8 @@ class FileView(GenericAPIView):
         if (not task_id) or (not field_id):
             return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
-        file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id, is_updated=False).first()
+        file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
+                                   is_updated=False).first()
 
         if file is None:
             return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)

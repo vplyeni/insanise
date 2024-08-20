@@ -6,7 +6,7 @@ class EmployeeDTO(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'email', 'position', 'department', 'date_of_birth', 'company', 'target_group', 'team']
+        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'email', 'position', 'department', 'date_of_birth', 'company', 'target_group', 'team', 'is_manager', 'is_superuser']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
