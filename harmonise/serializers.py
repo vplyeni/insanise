@@ -65,4 +65,17 @@ class UserFieldSerializer(serializers.Serializer):
 class FileSerializer(serializers.Serializer):
     class Meta:
         model = File
-        fields = '__all__'
+        fields = ['name', 'suffix', 'company', 'created_at', 'updated_at', 'created_by', 'updated_by', 'user', 'file']
+
+    def create(self, validated_data):
+        print(validated_data)
+        # Create and return a new instance of YourModel
+        return File.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        instance.created_by = validated_data.get('created_by', instance.created_by)
+        instance.updated_by = validated_data.get('updated_by', instance.updated_by)
+        instance.user = validated_data.get('user', instance.user)
+        # Update other fields as necessary
+        instance.save()
+        return instance

@@ -1,14 +1,18 @@
 import datetime
+import os
+import uuid
 
 from bson import ObjectId
+from django.http import FileResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParameter, extend_schema_serializer
 from mongoengine import DoesNotExist
 from rest_framework import permissions, status, renderers
 from rest_framework.generics import GenericAPIView
-from rest_framework.parsers import MultiPartParser, FileUploadParser
+from rest_framework.parsers import MultiPartParser, FileUploadParser, FormParser
 from rest_framework.response import Response
 
+from company.models import Company
 from mongocon.mongo_models import Task, TaskFieldModel, TaskFieldTypeModel, UserField
 from .models import File
 from .serializers import NoOpSerializer, UserFieldSerializer, TaskSerializer, FileSerializer
@@ -356,9 +360,113 @@ class FileView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = FileSerializer
 
+    parser_classes = [MultiPartParser, FormParser]
+
+    """
+    def post(self, request, *args, **kwargs):
+        request.data["created_by"] = request.user
+        request.data["updated_by"] = request.user
+        request.data["user"] = request.user
+
+        
+
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+"""
 
     def post(self, request, *args, **kwargs):
         try:
-             print(request.data)
+            if (not request.data["task_id"]) or (not request.data["field_id"]):
+                return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            task_id = str(request.data["task_id"])
+            field_id = str(request.data["field_id"])
+
+            file = File.objects.get(task_id=task_id, field_id=field_id, user_id=request.user.id, is_updated=False)
+
+            if file is None:
+                up_file = request.FILES['file']
+                _, file_extension = os.path.splitext(up_file.name)
+                name = str(uuid.uuid4()) + file_extension
+                destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
+                with open(destination_path, 'wb+') as destination:
+                    for chunk in up_file.chunks():
+                        destination.write(chunk)
+
+
+                """
+                TO DO: task check
+                
+                """
+
+                data = {
+                    "name": name,
+                    "suffix": file_extension,
+                    "company_id": request.user.company_id,
+                    "created_by": request.user,
+                    "updated_by": request.user,
+                    "user": request.user,
+                    "task_id": task_id,
+                    "field_id": field_id,
+                }
+
+                file = File.objects.create(**data)
+
+                return Response({"message": f"File uploaded successfully as {name}"}, status=status.HTTP_201_CREATED)
+            else:
+                up_file = request.FILES['file']
+                _, file_extension = os.path.splitext(up_file.name)
+                name = str(uuid.uuid4()) + file_extension
+                destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
+                with open(destination_path, 'wb+') as destination:
+                    for chunk in up_file.chunks():
+                        destination.write(chunk)
+
+                """
+                TO DO: task check
+
+                """
+
+                file.is_updated = True
+                file.updated_by_id = request.user.id
+                file.save()
+
+                data = {
+                    "name": name,
+                    "suffix": file_extension,
+                    "company_id": request.user.company_id,
+                    "created_by": request.user,
+                    "updated_by": request.user,
+                    "user": request.user,
+                    "task_id": task_id,
+                    "field_id": field_id,
+                }
+
+                file = File.objects.create(**data)
+
+                return Response({"message": f"File updated and uploaded successfully as {name}"}, status=status.HTTP_201_CREATED)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request, *args, **kwargs):
+        task_id = str(request.query_params.get('task_id'))
+        field_id = str(request.query_params.get('field_id'))
+        user_id = request.user.id
+
+        if (not task_id) or (not field_id):
+            return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+        """
+        TO DO: task check
+
+        """
+
+        file = File.objects.filter(task_id=task_id, field_id=field_id,user_id=user_id).first()
+
+        if file is None:
+            return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        return FileResponse(open("/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/"+file.name, 'rb'))

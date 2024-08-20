@@ -15,4 +15,7 @@ class File(models.Model):
     updated_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='files_updated')
     user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='files_user')
 
-    file = models.FileField()
+    field_id = models.CharField(default="", max_length=255)
+    task_id = models.CharField(default="",max_length=255)
+
+    is_updated = models.BooleanField(default=False)
