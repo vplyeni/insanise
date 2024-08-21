@@ -89,19 +89,24 @@ class TaskAllSerializer(serializers.Serializer):
 
 
 class TaskFieldModelSerializer(serializers.Serializer):
-    id = serializers.CharField(required=False)
+    id = serializers.CharField(required=False, read_only=True)
     name = serializers.CharField(required=True)
     type = serializers.CharField(required=True)
-    content = serializers.CharField(required=True)
+    content = serializers.CharField(required=False, allow_blank=True)
+    represented_name = serializers.CharField(required=False, allow_blank=True)
+    updated_at = serializers.DateTimeField(required=False, read_only=True)
 
 
 class TaskUserSerializer(serializers.Serializer):
     task_id = serializers.CharField(required=True)
     user_id = serializers.IntegerField(required=True)
+
     name = serializers.CharField(max_length=200, required=True)
-    description = serializers.CharField(max_length=200, required=True)
+    description = serializers.CharField(max_length=1000, required=True)
     fields = TaskFieldModelSerializer(many=True)
+
     status = serializers.CharField(required=True)
+
     company_id = serializers.IntegerField(required=True)
     updated_by = serializers.IntegerField(required=True)
     created_by = serializers.IntegerField(required=True)

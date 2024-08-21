@@ -8,18 +8,9 @@ connect("insanise")
 
 
 class TaskFieldTypeModel(EmbeddedDocument):
-    id = StringField(default=lambda: str(uuid.uuid4()))
+    id = StringField(default=lambda: str(uuid.uuid4()), unique=False)
     name = StringField(required=True)
     type = StringField(required=True)
-
-
-class TaskFieldModel(EmbeddedDocument):
-    name = StringField(required=True)
-    type = StringField(required=True)
-    id = StringField(default=str(uuid.uuid4()), required=True, unique=True)
-    content = StringField(required=True)
-    represented_name = StringField(required=True)
-    updated_at = DateTimeField(default=datetime.utcnow)
 
 
 class Task(Document):
@@ -47,18 +38,23 @@ class Task(Document):
     def get_due_date(self):
         return self.due_date.strftime('%d-%m-%Y')
 
-"""
-TODO:
 
-isimler
-"""
+class TaskFieldModel(EmbeddedDocument):
+    id = StringField(default=str(uuid.uuid4()), unique=False)
+    name = StringField(required=True)
+    type = StringField(required=True)
+    content = StringField(default="", required=True, blank=True)
+    represented_name = StringField(default="", required=True, blank=True)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+
 
 class TaskUser(Document):
     task_id = StringField(required=True)
     user_id = IntField(required=True)
 
     name = StringField(max_length=200, required=True)
-    description = StringField(max_length=200, required=True)
+    description = StringField(max_length=1000, required=True)
 
     fields = ListField(EmbeddedDocumentField(TaskFieldModel))
     created_at = DateTimeField(default=datetime.now)

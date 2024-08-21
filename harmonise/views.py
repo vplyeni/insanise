@@ -1,7 +1,7 @@
 import datetime
 import os
 import uuid
-
+from mongocon.connection import task_user
 from bson import ObjectId
 from django.http import FileResponse
 from drf_spectacular.types import OpenApiTypes
@@ -9,7 +9,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParamet
 from mongoengine import DoesNotExist
 from rest_framework import permissions, status, renderers
 from rest_framework.generics import GenericAPIView
-from rest_framework.parsers import MultiPartParser, FileUploadParser, FormParser
+from rest_framework.parsers import MultiPartParser, FileUploadParser, FormParser, JSONParser
 from rest_framework.response import Response
 
 from company.models import Company
@@ -68,13 +68,13 @@ class TaskUserListView(GenericAPIView):
             data["created_by"] = request.user.id
             data["updated_by"] = request.user.id
             data["company_id"] = request.user.company_id
-            data["status"] = "not_complete"
+            data["status"] = "new"
 
             serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
                 user_field = TaskUser(**serializer.validated_data)
                 user_field.save()
-                return Response(json.loads(user_field.to_json()), status=status.HTTP_201_CREATED)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({
                 "error": str(e),
@@ -180,7 +180,9 @@ class TaskUserDetailView(GenericAPIView):
         if related_field is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        return Response(json.loads(related_field.to_json()), status=status.HTTP_200_OK)
+        serializer = self.serializer_class(related_field)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class TaskListView(GenericAPIView):
@@ -239,9 +241,46 @@ class TaskListView(GenericAPIView):
             if serializer.is_valid(raise_exception=True):
                 task = Task(**serializer.validated_data)
                 task.save()
+                task.reload()
 
+                mongo_list = []
 
+                mongo_data = {}
 
+                mongo_data["name"] = task.name
+                mongo_data["description"] = task.description
+                mongo_data["task_id"] = str(task.id)
+
+                mongo_data["created_by"] = request.user.id
+                mongo_data["updated_by"] = request.user.id
+                mongo_data["company_id"] = request.user.company_id
+                mongo_data["status"] = "new"
+
+                for assigned in task.assigned_to:
+                    print(assigned)
+                    fields = [
+                        {
+                            "id": i.id,
+                            "name": i.name,
+                            "type": i.type,
+                            "content": "",
+                            "represented_name": ""
+                        }
+                        for i in task.fields
+                    ]
+                    print(fields)
+                    ids = [i.id for i in task.fields]
+                    mongo_data["fields"] = fields
+
+                    mongo_data["user_id"] = assigned
+                    task_user_serializer = TaskUserSerializer(data=mongo_data)
+                    if task_user_serializer.is_valid(raise_exception=True):
+                        task = TaskUser(**task_user_serializer.validated_data)
+                        for i in range(len(task.fields)):
+                            task.fields[i].id = str(uuid.uuid4())
+                        mongo_list.append(task.to_mongo())
+
+                task_user.insert_many(mongo_list)
 
                 return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -265,10 +304,10 @@ class TaskListView(GenericAPIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            tasks = Task.objects(assigned_to__contains=request.user.id)[skip:limit + skip]
-            count = Task.objects(assigned_to__contains=request.user.id).count()
+            tasks = TaskUser.objects(user_id=request.user.id)[skip:limit + skip]
+            count = TaskUser.objects(user_id=request.user.id).count()
 
-            serialized_tasks = self.serializer_class(tasks, many=True)
+            serialized_tasks = TaskUserSerializer(tasks, many=True)
 
             return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
         except Exception as e:
@@ -393,25 +432,44 @@ class AllTasksView(GenericAPIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""):
+    print(22)
+    print(task_id, user_id, field_id)
+    user_field = TaskUser.objects.get(task_id=task_id, user_id=user_id)
+
+    print(33)
+    if user_field is None:
+        raise Exception("User Field not found")
+
+    changed = False
+
+    if represented_name == "":
+        for i in range(len(user_field.fields)):
+            if user_field.fields[i].id == field_id:
+                user_field.fields[i].content = content
+                changed = True
+                break
+    else:
+        for i in range(len(user_field.fields)):
+            print(user_field.fields[i].id, field_id)
+            if user_field.fields[i].id == field_id:
+                user_field.fields[i].content = content
+                user_field.fields[i].represented_name = represented_name
+                changed = True
+                break
+
+    if changed:
+        user_field.save()
+    else:
+        raise Exception("Field_id is not valid")
+
+
+
 class FileView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = FileSerializer
 
-    parser_classes = [MultiPartParser, FormParser]
-
-    """
-    def post(self, request, *args, **kwargs):
-        request.data["created_by"] = request.user
-        request.data["updated_by"] = request.user
-        request.data["user"] = request.user
-
-        
-
-        if serializer.is_valid(raise_exception=True):
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-"""
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, *args, **kwargs):
         try:
@@ -425,7 +483,7 @@ class FileView(GenericAPIView):
                                        is_updated=False).first()
 
             if file is None:
-                print(1)
+                print(11)
                 up_file = request.FILES['file']
                 represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
@@ -434,7 +492,10 @@ class FileView(GenericAPIView):
                     for chunk in up_file.chunks():
                         destination.write(chunk)
 
+                update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
+                                    field_id=field_id, represented_name=represent_name)
 
+                print(44)
                 """
                 
                 TO DO: task check
@@ -442,7 +503,7 @@ class FileView(GenericAPIView):
                 """
                 print(2)
                 data = {
-                    "represent_name": represent_name,
+                    "represent_name": represent_name + file_extension,
                     "name": name,
                     "suffix": file_extension,
                     "company_id": request.user.company_id,
@@ -455,9 +516,10 @@ class FileView(GenericAPIView):
                 print(3)
                 file = File.objects.create(**data)
                 print(4)
-                return Response({"message": f"File uploaded successfully as {name}"},
+                return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
             else:
+                print(1)
                 up_file = request.FILES['file']
                 represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
@@ -465,18 +527,21 @@ class FileView(GenericAPIView):
                 with open(destination_path, 'wb+') as destination:
                     for chunk in up_file.chunks():
                         destination.write(chunk)
+                print(2)
+                update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
+                                    field_id=field_id, represented_name=represent_name)
 
                 """
                 TO DO: task check
 
                 """
-
+                print(3)
                 file.is_updated = True
                 file.updated_by_id = request.user.id
                 file.save()
-
+                print(4)
                 data = {
-                    "represent_name": represent_name,
+                    "represent_name": represent_name + file_extension,
                     "name": name,
                     "suffix": file_extension,
                     "company_id": request.user.company_id,
@@ -488,8 +553,8 @@ class FileView(GenericAPIView):
                 }
 
                 file = File.objects.create(**data)
-
-                return Response({"message": f"File updated and uploaded successfully as {name}"},
+                print(5)
+                return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -536,3 +601,39 @@ class FileView(GenericAPIView):
         file.save()
 
         return Response({"message": "File deleted"}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'content': {'type': 'string'},
+                    'task_id': {'type': 'string'},
+                    'field_id': {'type': 'string'}
+                },
+                'required': ['content', 'task_id', 'field_id']
+            }
+        },
+        responses={200: OpenApiTypes.OBJECT}  # Modify response type based on your needs
+    )
+    def put(self, request, *args, **kwargs):
+        try:
+            task_id = request.data.get('task_id')
+            field_id = request.data.get('field_id')
+            content = request.data.get('content')
+            user_id = request.user.id
+
+            print(2)
+            if (not task_id) or (not field_id):
+                return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not content:
+                return Response({"error": "Content cannot be empty"}, status=status.HTTP_400_BAD_REQUEST)
+
+            print(4)
+
+            update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content=content)
+
+            return Response({"message": "Field updated successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
