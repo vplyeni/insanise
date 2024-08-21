@@ -16,6 +16,8 @@ class File(models.Model):
     user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='files_user')
 
     field_id = models.CharField(default="", max_length=255)
-    task_id = models.CharField(default="",max_length=255)
+    task_id = models.CharField(default="", max_length=255)
 
     is_updated = models.BooleanField(default=False)
+
+    represent_name = models.CharField(default="", max_length=255)

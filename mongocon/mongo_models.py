@@ -18,6 +18,8 @@ class TaskFieldModel(EmbeddedDocument):
     type = StringField(required=True)
     id = StringField(default=str(uuid.uuid4()), required=True, unique=True)
     content = StringField(required=True)
+    represented_name = StringField(required=True)
+    updated_at = DateTimeField(default=datetime.utcnow)
 
 
 class Task(Document):

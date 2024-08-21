@@ -110,7 +110,7 @@ class TaskUserSerializer(serializers.Serializer):
 class FileSerializer(serializers.Serializer):
     class Meta:
         model = File
-        fields = ['name', 'suffix', 'company', 'created_at', 'updated_at', 'created_by', 'updated_by', 'user', 'file']
+        fields = ["represent_name",'name', 'suffix', 'company', 'created_at', 'updated_at', 'created_by', 'updated_by', 'user', 'file']
 
     def create(self, validated_data):
         print(validated_data)

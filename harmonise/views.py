@@ -239,6 +239,10 @@ class TaskListView(GenericAPIView):
             if serializer.is_valid(raise_exception=True):
                 task = Task(**serializer.validated_data)
                 task.save()
+
+
+
+
                 return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -421,21 +425,24 @@ class FileView(GenericAPIView):
                                        is_updated=False).first()
 
             if file is None:
+                print(1)
                 up_file = request.FILES['file']
-                _, file_extension = os.path.splitext(up_file.name)
+                represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
                 destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
                 with open(destination_path, 'wb+') as destination:
                     for chunk in up_file.chunks():
                         destination.write(chunk)
 
+
                 """
                 
                 TO DO: task check
                 
                 """
-
+                print(2)
                 data = {
+                    "represent_name": represent_name,
                     "name": name,
                     "suffix": file_extension,
                     "company_id": request.user.company_id,
@@ -445,14 +452,14 @@ class FileView(GenericAPIView):
                     "task_id": task_id,
                     "field_id": field_id,
                 }
-
+                print(3)
                 file = File.objects.create(**data)
-
+                print(4)
                 return Response({"message": f"File uploaded successfully as {name}"},
                                 status=status.HTTP_201_CREATED)
             else:
                 up_file = request.FILES['file']
-                _, file_extension = os.path.splitext(up_file.name)
+                represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
                 destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
                 with open(destination_path, 'wb+') as destination:
@@ -469,6 +476,7 @@ class FileView(GenericAPIView):
                 file.save()
 
                 data = {
+                    "represent_name": represent_name,
                     "name": name,
                     "suffix": file_extension,
                     "company_id": request.user.company_id,
