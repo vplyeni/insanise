@@ -68,7 +68,7 @@ class TaskUserListView(GenericAPIView):
             data["created_by"] = request.user.id
             data["updated_by"] = request.user.id
             data["company_id"] = request.user.company_id
-            data["status"] = "new"
+            data["status"] = "New"
 
             serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
@@ -235,7 +235,7 @@ class TaskListView(GenericAPIView):
             data["created_by"] = request.user.id
             data["updated_by"] = request.user.id
             data["company_id"] = request.user.company_id
-            data["status"] = "new"
+            data["status"] = "New"
 
             serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
@@ -254,7 +254,7 @@ class TaskListView(GenericAPIView):
                 mongo_data["created_by"] = request.user.id
                 mongo_data["updated_by"] = request.user.id
                 mongo_data["company_id"] = request.user.company_id
-                mongo_data["status"] = "new"
+                mongo_data["status"] = "New"
 
                 for assigned in task.assigned_to:
                     print(assigned)
@@ -459,6 +459,7 @@ def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""
                 break
 
     if changed:
+        user_field.status = "In Process"
         user_field.save()
     else:
         raise Exception("Field_id is not valid")
