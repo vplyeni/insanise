@@ -48,7 +48,6 @@ class TaskFieldModel(EmbeddedDocument):
     updated_at = DateTimeField(default=datetime.utcnow)
 
 
-
 class TaskUser(Document):
     task_id = StringField(required=True)
     user_id = IntField(required=True)
@@ -64,4 +63,3 @@ class TaskUser(Document):
 
     status = StringField(required=True)
     company_id = IntField(required=True)
-

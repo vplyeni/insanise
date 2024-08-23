@@ -5,17 +5,15 @@ from mongocon.connection import task_user
 from bson import ObjectId
 from django.http import FileResponse
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParameter, extend_schema_serializer
+from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParameter
 from mongoengine import DoesNotExist
 from rest_framework import permissions, status, renderers
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import MultiPartParser, FileUploadParser, FormParser, JSONParser
 from rest_framework.response import Response
-
-from company.models import Company
-from mongocon.mongo_models import Task, TaskFieldModel, TaskFieldTypeModel, TaskUser
+from mongocon.mongo_models import Task, TaskUser
 from .models import File
-from .serializers import NoOpSerializer, TaskUserSerializer, TaskSerializer, FileSerializer, TaskAllSerializer
+from .serializers import TaskUserSerializer, TaskSerializer, FileSerializer, TaskAllSerializer
 
 import json
 
@@ -196,14 +194,11 @@ class TaskListView(GenericAPIView):
                 'properties': {
                     'name': {'type': 'string'},
                     'description': {'type': 'string'},
-                    'fields': {'type': 'array', 'items':
-                        {
-                            'type': 'object',
-                            'properties': {
-                                'name': {'type': 'string'},
-                                'type': {'type': 'string'},
-                            }
-                        }
+                    'fields': {'type': 'array', 'items': {'type': 'object',
+                                                          'properties': {'name': {'type': 'string'},
+                                                                         'type': {'type': 'string'},
+                                                                         }
+                                                          }
                                },
                     'assigned_to': {'type': 'array', 'items': {'type': 'integer'}}
                 },
@@ -245,19 +240,11 @@ class TaskListView(GenericAPIView):
 
                 mongo_list = []
 
-                mongo_data = {}
-
-                mongo_data["name"] = task.name
-                mongo_data["description"] = task.description
-                mongo_data["task_id"] = str(task.id)
-
-                mongo_data["created_by"] = request.user.id
-                mongo_data["updated_by"] = request.user.id
-                mongo_data["company_id"] = request.user.company_id
-                mongo_data["status"] = "New"
+                mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),
+                              "created_by": request.user.id, "updated_by": request.user.id,
+                              "company_id": request.user.company_id, "status": "New"}
 
                 for assigned in task.assigned_to:
-                    print(assigned)
                     fields = [
                         {
                             "id": i.id,
@@ -268,8 +255,6 @@ class TaskListView(GenericAPIView):
                         }
                         for i in task.fields
                     ]
-                    print(fields)
-                    ids = [i.id for i in task.fields]
                     mongo_data["fields"] = fields
 
                     mongo_data["user_id"] = assigned
@@ -342,14 +327,11 @@ class TaskView(GenericAPIView):
                 'properties': {
                     'name': {'type': 'string'},
                     'description': {'type': 'string'},
-                    'fields': {'type': 'array', 'items':
-                        {
-                            'type': 'object',
-                            'properties': {
-                                'name': {'type': 'string'},
-                                'type': {'type': 'string'},
-                            }
-                        }
+                    'fields': {'type': 'array', 'items': {'type': 'object',
+                                                          'properties': {'name': {'type': 'string'},
+                                                                         'type': {'type': 'string'},
+                                                                         }
+                                                          }
                                },
                     'assigned_to': {'type': 'array', 'items': {'type': 'integer'}}
                 },
@@ -433,11 +415,8 @@ class AllTasksView(GenericAPIView):
 
 
 def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""):
-    print(22)
-    print(task_id, user_id, field_id)
     user_field = TaskUser.objects.get(task_id=task_id, user_id=user_id)
 
-    print(33)
     if user_field is None:
         raise Exception("User Field not found")
 
@@ -451,7 +430,6 @@ def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""
                 break
     else:
         for i in range(len(user_field.fields)):
-            print(user_field.fields[i].id, field_id)
             if user_field.fields[i].id == field_id:
                 user_field.fields[i].content = content
                 user_field.fields[i].represented_name = represented_name
@@ -463,7 +441,6 @@ def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""
         user_field.save()
     else:
         raise Exception("Field_id is not valid")
-
 
 
 class FileView(GenericAPIView):
@@ -484,7 +461,6 @@ class FileView(GenericAPIView):
                                        is_updated=False).first()
 
             if file is None:
-                print(11)
                 up_file = request.FILES['file']
                 represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
@@ -496,13 +472,11 @@ class FileView(GenericAPIView):
                 update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
                                     field_id=field_id, represented_name=represent_name)
 
-                print(44)
                 """
                 
                 TO DO: task check
                 
                 """
-                print(2)
                 data = {
                     "represent_name": represent_name + file_extension,
                     "name": name,
@@ -514,13 +488,10 @@ class FileView(GenericAPIView):
                     "task_id": task_id,
                     "field_id": field_id,
                 }
-                print(3)
                 file = File.objects.create(**data)
-                print(4)
                 return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
             else:
-                print(1)
                 up_file = request.FILES['file']
                 represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
@@ -528,7 +499,6 @@ class FileView(GenericAPIView):
                 with open(destination_path, 'wb+') as destination:
                     for chunk in up_file.chunks():
                         destination.write(chunk)
-                print(2)
                 update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
                                     field_id=field_id, represented_name=represent_name)
 
@@ -536,11 +506,10 @@ class FileView(GenericAPIView):
                 TO DO: task check
 
                 """
-                print(3)
                 file.is_updated = True
                 file.updated_by_id = request.user.id
                 file.save()
-                print(4)
+
                 data = {
                     "represent_name": represent_name + file_extension,
                     "name": name,
@@ -554,7 +523,7 @@ class FileView(GenericAPIView):
                 }
 
                 file = File.objects.create(**data)
-                print(5)
+
                 return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
 
@@ -624,14 +593,11 @@ class FileView(GenericAPIView):
             content = request.data.get('content')
             user_id = request.user.id
 
-            print(2)
             if (not task_id) or (not field_id):
                 return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
             if not content:
                 return Response({"error": "Content cannot be empty"}, status=status.HTTP_400_BAD_REQUEST)
-
-            print(4)
 
             update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content=content)
 
