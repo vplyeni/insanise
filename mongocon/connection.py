@@ -1,5 +1,5 @@
 import pymongo
-
+from mongoengine import connect
 # Define the connection parameters for pymongo
 client = pymongo.MongoClient("mongodb://localhost:27017/")
 
@@ -7,3 +7,5 @@ client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = client["insanise"]
 
 task_user = db["task_user"]
+
+connect("insanise")

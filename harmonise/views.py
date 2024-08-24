@@ -1,27 +1,57 @@
 import datetime
 import os
 import uuid
+
+from rest_framework.decorators import action
+from rest_framework.views import APIView
+
 from mongocon.connection import task_user
 from bson import ObjectId
 from django.http import FileResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema, OpenApiParameter
 from mongoengine import DoesNotExist
-from rest_framework import permissions, status, renderers
-from rest_framework.generics import GenericAPIView
+from rest_framework import permissions, status, renderers, viewsets
 from rest_framework.parsers import MultiPartParser, FileUploadParser, FormParser, JSONParser
 from rest_framework.response import Response
-from mongocon.mongo_models import Task, TaskUser
+from harmonise.mongo_models import Task, TaskUser
 from .models import File
-from .serializers import TaskUserSerializer, TaskSerializer, FileSerializer, TaskAllSerializer
-
-import json
+from .serializers import TaskUserSerializer, TaskSerializer, FileSerializer, ManagerTaskSerializer
 
 
-# Create your views here.
+# Common Function across views.
+def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""):
+    user_field = TaskUser.objects.get(task_id=task_id, user_id=user_id)
+
+    if user_field is None:
+        raise Exception("User Field not found")
+
+    changed = False
+
+    if represented_name == "":
+        for i in range(len(user_field.fields)):
+            if user_field.fields[i].id == field_id:
+                user_field.fields[i].content = content
+                changed = True
+                break
+    else:
+        for i in range(len(user_field.fields)):
+            if user_field.fields[i].id == field_id:
+                user_field.fields[i].content = content
+                user_field.fields[i].represented_name = represented_name
+                changed = True
+                break
+
+    if changed:
+        user_field.status = "In Process"
+        user_field.save()
+    else:
+        raise Exception("Field_id is not valid")
 
 
-class TaskUserListView(GenericAPIView):
+# TASK USER
+
+class TaskUserListView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = TaskUserSerializer
     parser_classes = (MultiPartParser, FileUploadParser)
@@ -31,21 +61,17 @@ class TaskUserListView(GenericAPIView):
         request={
             'application/json': {
                 'type': 'object',
-                'properties': {
-                    'task_id': {'type': 'string'},
-                    'name': {'type': 'string'},
-                    'description': {'type': 'string'},
-                    'fields': {'type': 'array', 'items':
-                        {
-                            'type': 'object',
-                            'properties': {
-                                'name': {'type': 'string'},
-                                'type': {'type': 'string'},
-                                'content': {'type': 'string'},
-                            }
-                        }
+                'properties': {'task_id': {'type': 'string'},
+                               'name': {'type': 'string'},
+                               'description': {'type': 'string'},
+                               'fields': {'type': 'array', 'items': {'type': 'object',
+                                                                     'properties': {'name': {'type': 'string'},
+                                                                                    'type': {'type': 'string'},
+                                                                                    'content': {'type': 'string'},
+                                                                                    }
+                                                                     }
+                                          },
                                },
-                },
                 'required': ['name', 'description', 'fields'],
             },
         }
@@ -79,7 +105,7 @@ class TaskUserListView(GenericAPIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class TaskUserDetailView(GenericAPIView):
+class TaskUserView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = TaskUserSerializer
 
@@ -183,93 +209,11 @@ class TaskUserDetailView(GenericAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class TaskListView(GenericAPIView):
+# TASK
+
+class TaskListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskSerializer
-
-    @extend_schema(
-        request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'name': {'type': 'string'},
-                    'description': {'type': 'string'},
-                    'fields': {'type': 'array', 'items': {'type': 'object',
-                                                          'properties': {'name': {'type': 'string'},
-                                                                         'type': {'type': 'string'},
-                                                                         }
-                                                          }
-                               },
-                    'assigned_to': {'type': 'array', 'items': {'type': 'integer'}}
-                },
-                'required': ['name', 'description', 'fields', 'user_ids'],
-            },
-        },
-        responses={
-            200: OpenApiResponse(
-                description="Task created successfully",
-                examples={
-                    'application/json': {
-                        'task': {
-                            'id': 'string',
-                            'name': 'string',
-                            'description': 'string',
-                            'fields': [
-                                {'type': 'string', 'name': 'string'}
-                            ],
-                        }
-                    }
-                }
-            ),
-            500: OpenApiResponse(description="Internal Server Error"),
-        },
-    )
-    def post(self, request, *args, **kwargs):
-        try:
-            data = request.data
-            data["created_by"] = request.user.id
-            data["updated_by"] = request.user.id
-            data["company_id"] = request.user.company_id
-            data["status"] = "New"
-
-            serializer = self.serializer_class(data=data)
-            if serializer.is_valid(raise_exception=True):
-                task = Task(**serializer.validated_data)
-                task.save()
-                task.reload()
-
-                mongo_list = []
-
-                mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),
-                              "created_by": request.user.id, "updated_by": request.user.id,
-                              "company_id": request.user.company_id, "status": "New"}
-
-                for assigned in task.assigned_to:
-                    fields = [
-                        {
-                            "id": i.id,
-                            "name": i.name,
-                            "type": i.type,
-                            "content": "",
-                            "represented_name": ""
-                        }
-                        for i in task.fields
-                    ]
-                    mongo_data["fields"] = fields
-
-                    mongo_data["user_id"] = assigned
-                    task_user_serializer = TaskUserSerializer(data=mongo_data)
-                    if task_user_serializer.is_valid(raise_exception=True):
-                        task = TaskUser(**task_user_serializer.validated_data)
-                        for i in range(len(task.fields)):
-                            task.fields[i].id = str(uuid.uuid4())
-                        mongo_list.append(task.to_mongo())
-
-                task_user.insert_many(mongo_list)
-
-                return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(
         parameters=[
@@ -299,7 +243,7 @@ class TaskListView(GenericAPIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class TaskView(GenericAPIView):
+class TaskView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskSerializer
 
@@ -378,10 +322,9 @@ class TaskView(GenericAPIView):
         except DoesNotExist:
             return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
 
-
-class AllTasksView(GenericAPIView):
+class ManagerTaskViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = TaskAllSerializer
+    serializer_class = ManagerTaskSerializer
 
     @extend_schema(
         parameters=[
@@ -390,7 +333,7 @@ class AllTasksView(GenericAPIView):
                              type=OpenApiTypes.INT),
         ],
     )
-    def get(self, request, *args, **kwargs):
+    def list(self, request, *args, **kwargs):
         skip = 0
         limit = 0
 
@@ -413,37 +356,140 @@ class AllTasksView(GenericAPIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {'name': {'type': 'string'},
+                               'description': {'type': 'string'},
+                               'fields': {'type': 'array', 'items': {'type': 'object',
+                                                                     'properties': {'name': {'type': 'string'},
+                                                                                    'type': {'type': 'string'},
+                                                                                    }
+                                                                     }
+                                          },
+                               'assigned_to': {'type': 'array', 'items': {'type': 'integer'}},
+                               'task_period': {'type': 'integer'},
+                               },
+                'required': ['name', 'description', 'fields', 'user_ids'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(
+                description="Task created successfully",
+                examples={
+                    'application/json': {'task': {'id': 'string',
+                                                  'name': 'string',
+                                                  'description': 'string',
+                                                  'fields': [
+                                                      {'type': 'string', 'name': 'string'}
+                                                  ],
+                                                  }
+                                         }
+                }
+            ),
+            500: OpenApiResponse(description="Internal Server Error"),
+        },
+    )
+    def create(self, request, *args, **kwargs):
+        try:
+            data = request.data
+            data["created_by"] = request.user.id
+            data["updated_by"] = request.user.id
+            data["company_id"] = request.user.company_id
+            data["assigned_to"] = []
+            data["status"] = "New"
 
-def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""):
-    user_field = TaskUser.objects.get(task_id=task_id, user_id=user_id)
+            serializer = self.serializer_class(data=data)
+            if serializer.is_valid(raise_exception=True):
+                task = Task(**serializer.validated_data)
+                task.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    if user_field is None:
-        raise Exception("User Field not found")
+    @action(methods=["post"], detail=False)
+    def assign_task(self, request, *args, **kwargs):
+        try:
+            task_id = str(request.query_params.get('task_id'))
+            user_id = request.user.id
 
-    changed = False
+            if not task_id or not user_id:
+                return Response({"error": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-    if represented_name == "":
-        for i in range(len(user_field.fields)):
-            if user_field.fields[i].id == field_id:
-                user_field.fields[i].content = content
-                changed = True
-                break
-    else:
-        for i in range(len(user_field.fields)):
-            if user_field.fields[i].id == field_id:
-                user_field.fields[i].content = content
-                user_field.fields[i].represented_name = represented_name
-                changed = True
-                break
+            if not request.user.is_manager:
+                return Response({"error": "Only manager can assign tasks"}, status=status.HTTP_400_BAD_REQUEST)
 
-    if changed:
-        user_field.status = "In Process"
-        user_field.save()
-    else:
-        raise Exception("Field_id is not valid")
+            task = Task.objects.get(id=ObjectId(task_id))
+
+            will_assign_employees = request.data.get("assigned_to")
+
+            mongo_list = []
+
+            mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),
+                          "created_by": request.user.id, "updated_by": request.user.id,
+                          "company_id": request.user.company_id, "status": "New"}
+
+            for assigned in will_assign_employees:
+                fields = [
+                    {
+                        "id": i.id,
+                        "name": i.name,
+                        "type": i.type,
+                        "content": "",
+                        "represented_name": ""
+                    }
+                    for i in task.fields
+                ]
+                mongo_data["fields"] = fields
+
+                mongo_data["user_id"] = assigned
+                task_user_serializer = TaskUserSerializer(data=mongo_data)
+                if task_user_serializer.is_valid(raise_exception=True):
+                    task = TaskUser(**task_user_serializer.validated_data)
+                    for i in range(len(task.fields)):
+                        task.fields[i].id = str(uuid.uuid4())
+                    mongo_list.append(task.to_mongo())
+            task_user.insert_many(mongo_list)
+
+            task.assigned_to.extend(will_assign_employees)
+            task.save()
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(methods=["post"], detail=False)
+    def withdraw_task(self, request, *args, **kwargs):
+        try:
+            task_id = str(request.query_params.get('task_id'))
+            user_id = request.user.id
+
+            if not task_id or not user_id:
+                return Response({"error": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not request.user.is_manager:
+                return Response({"error": "Only manager can assign tasks"}, status=status.HTTP_400_BAD_REQUEST)
+
+            will_withdraw_employees = request.data.get("assigned_to")
+
+            task = Task.objects.get(id=ObjectId(task_id))
+            for i in task.assigned_to:
+                if i in will_withdraw_employees:
+                    task.assigned_to.remove(i)
+
+            TaskUser.objects(user_id__in=will_withdraw_employees).update_many(set__status='Withdrawn')
+
+            task.save()
+            return Response({"status": "Withdrawn", "withdraw_employees": will_withdraw_employees},
+                            status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class FileView(GenericAPIView):
+# FILE
+
+class FileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = FileSerializer
 
@@ -488,7 +534,8 @@ class FileView(GenericAPIView):
                     "task_id": task_id,
                     "field_id": field_id,
                 }
-                file = File.objects.create(**data)
+                File.objects.create(**data)
+
                 return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
             else:
@@ -522,7 +569,7 @@ class FileView(GenericAPIView):
                     "field_id": field_id,
                 }
 
-                file = File.objects.create(**data)
+                File.objects.create(**data)
 
                 return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
@@ -554,8 +601,6 @@ class FileView(GenericAPIView):
     def delete(self, request, *args, **kwargs):
         task_id = str(request.query_params.get('task_id'))
         field_id = str(request.query_params.get('field_id'))
-
-        user_id = request.user.id
 
         if (not task_id) or (not field_id):
             return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
@@ -591,7 +636,6 @@ class FileView(GenericAPIView):
             task_id = request.data.get('task_id')
             field_id = request.data.get('field_id')
             content = request.data.get('content')
-            user_id = request.user.id
 
             if (not task_id) or (not field_id):
                 return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)

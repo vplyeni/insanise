@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from company.models import Employee
 
-class EmployeeDTO(serializers.ModelSerializer):
+class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
 
     class Meta:

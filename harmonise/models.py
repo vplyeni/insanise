@@ -1,7 +1,7 @@
 from django.db import models
 from company.models import Company, Employee
 
-# Create your models here.
+
 class File(models.Model):
     name = models.CharField(default="", max_length=255)
     suffix = models.CharField(default="", max_length=255)

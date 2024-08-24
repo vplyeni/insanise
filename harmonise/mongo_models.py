@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from mongoengine import connect, Document, StringField, IntField, EmbeddedDocument, ListField, EmbeddedDocumentField, \
-    DateTimeField, DateField
+    DateTimeField, BooleanField
 
 connect("insanise")
 
@@ -21,7 +21,8 @@ class Task(Document):
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now)
 
-    due_date = DateTimeField(required=True)
+    # Time required to complete the task, in seconds
+    task_period = IntField(required=True)
 
     created_by = IntField(required=True)
     updated_by = IntField(required=True)
@@ -31,12 +32,6 @@ class Task(Document):
     company_id = IntField(required=True)
 
     assigned_to = ListField(IntField())
-
-    def set_due_date(self, date_str):
-        self.due_date = datetime.strptime(date_str, '%d-%m-%Y')
-
-    def get_due_date(self):
-        return self.due_date.strftime('%d-%m-%Y')
 
 
 class TaskFieldModel(EmbeddedDocument):
@@ -63,3 +58,11 @@ class TaskUser(Document):
 
     status = StringField(required=True)
     company_id = IntField(required=True)
+
+    due_date = DateTimeField(default=datetime.now)
+
+    def set_due_date(self, date_str):
+        self.due_date = datetime.strptime(date_str, '%d-%m-%Y')
+
+    def get_due_date(self):
+        return self.due_date.strftime('%d-%m-%Y')
