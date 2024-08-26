@@ -90,15 +90,6 @@ class TaskUserSerializer(serializers.Serializer):
 
     due_date = serializers.DateTimeField(required=True, format='%d-%m-%Y')
 
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        ret['due_date'] = instance.get_due_date()
-        return ret
-
-    def to_internal_value(self, data):
-        data['due_date'] = datetime.strptime(data['due_date'], '%d-%m-%Y')
-        return super().to_internal_value(data)
-
 
 class FileSerializer(serializers.Serializer):
     class Meta:
@@ -118,3 +109,8 @@ class FileSerializer(serializers.Serializer):
         # Update other fields as necessary
         instance.save()
         return instance
+
+class AssignAndWithdrawSerializer(serializers.Serializer):
+    task_id = serializers.CharField(required=True)
+    assigned_period = serializers.IntegerField(required=True)
+    assigned_to = serializers.ListField(child=serializers.IntegerField())

@@ -16,35 +16,40 @@ from rest_framework.parsers import MultiPartParser, FileUploadParser, FormParser
 from rest_framework.response import Response
 from harmonise.mongo_models import Task, TaskUser
 from .models import File
-from .serializers import TaskUserSerializer, TaskSerializer, FileSerializer, ManagerTaskSerializer
+from .serializers import TaskUserSerializer, TaskSerializer, FileSerializer, ManagerTaskSerializer, \
+    AssignAndWithdrawSerializer
+from company.permissions import IsManager, IsSuperUser
 
 
 # Common Function across views.
 def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""):
-    user_field = TaskUser.objects.get(task_id=task_id, user_id=user_id)
+    task_user = TaskUser.objects.get(task_id=task_id, user_id=user_id)
 
-    if user_field is None:
+    if task_user is None:
         raise Exception("User Field not found")
 
     changed = False
 
     if represented_name == "":
-        for i in range(len(user_field.fields)):
-            if user_field.fields[i].id == field_id:
-                user_field.fields[i].content = content
+        for i in range(len(task_user.fields)):
+            if task_user.fields[i].id == field_id:
+                task_user.fields[i].content = content
+                task_user.fields[i].updated_at = datetime.datetime.now()
                 changed = True
                 break
     else:
-        for i in range(len(user_field.fields)):
-            if user_field.fields[i].id == field_id:
-                user_field.fields[i].content = content
-                user_field.fields[i].represented_name = represented_name
+        for i in range(len(task_user.fields)):
+            if task_user.fields[i].id == field_id:
+                task_user.fields[i].content = content
+                task_user.fields[i].represented_name = represented_name
+                task_user.fields[i].updated_at = datetime.datetime.now()
                 changed = True
                 break
 
     if changed:
-        user_field.status = "In Process"
-        user_field.save()
+        task_user.status = "In Progress"
+        task_user.save()
+        return task_user
     else:
         raise Exception("Field_id is not valid")
 
@@ -96,8 +101,8 @@ class TaskUserListView(APIView):
 
             serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
-                user_field = TaskUser(**serializer.validated_data)
-                user_field.save()
+                task_user = TaskUser(**serializer.validated_data)
+                task_user.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({
@@ -180,11 +185,11 @@ class TaskUserView(APIView):
     )
     def put(self, request, task_id, *args, **kwargs):
         try:
-            user_field = TaskUser.objects.get(task_id=task_id, user_id=request.user.id)
+            task_user = TaskUser.objects.get(task_id=task_id, user_id=request.user.id)
             serializer = self.serializer_class(data=request.data)
             if serializer.is_valid(raise_exception=True):
-                user_field.update(**serializer.validated_data)
-                user_field.reload()  # Refresh the document with updated data
+                task_user.update(**serializer.validated_data)
+                task_user.reload()  # Refresh the document with updated data
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
@@ -243,14 +248,8 @@ class TaskListView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class TaskView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = TaskSerializer
-
-
-
 class ManagerTaskViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsManager]
     serializer_class = ManagerTaskSerializer
 
     @extend_schema(
@@ -263,9 +262,6 @@ class ManagerTaskViewSet(viewsets.ViewSet):
     def list(self, request, *args, **kwargs):
         skip = 0
         limit = 0
-
-        if not request.user.is_manager:
-            return Response("User is not a manager", status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             skip = int(request.query_params.get('skip'))
@@ -335,29 +331,35 @@ class ManagerTaskViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(methods=["post"], detail=False)
+    @action(methods=["post"], detail=False, serializer_class=AssignAndWithdrawSerializer)
     def assign_task(self, request, *args, **kwargs):
         try:
-            task_id = str(request.query_params.get('task_id'))
+            data = AssignAndWithdrawSerializer(data=request.data)
+
+            data.is_valid(raise_exception=True)
+
+            print(data.validated_data)
+
+            task_id = data.validated_data.get("task_id")
+            will_assign_employees = data.validated_data.get("assigned_to")
+            assigned_period = data.validated_data.get("assigned_period")
+
             user_id = request.user.id
 
             if not task_id or not user_id:
                 return Response({"error": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not request.user.is_manager:
-                return Response({"error": "Only manager can assign tasks"}, status=status.HTTP_400_BAD_REQUEST)
-
             task = Task.objects.get(id=ObjectId(task_id))
 
-            will_assign_employees = request.data.get("assigned_to")
-
             mongo_list = []
-
+            print(1)
             mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),
                           "created_by": request.user.id, "updated_by": request.user.id,
-                          "company_id": request.user.company_id, "status": "New"}
-
+                          "company_id": request.user.company_id, "status": "New",
+                          "due_date": (datetime.datetime.now() + datetime.timedelta(seconds=assigned_period)).strftime("%Y-%m-%d %H:%M:%S"),}
+            print(2)
             for assigned in will_assign_employees:
+                print(3)
                 fields = [
                     {
                         "id": i.id,
@@ -369,18 +371,21 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                     for i in task.fields
                 ]
                 mongo_data["fields"] = fields
-
+                print(4)
                 mongo_data["user_id"] = assigned
                 task_user_serializer = TaskUserSerializer(data=mongo_data)
+                print(4.1)
                 if task_user_serializer.is_valid(raise_exception=True):
+                    print(4.2)
                     task = TaskUser(**task_user_serializer.validated_data)
                     for i in range(len(task.fields)):
                         task.fields[i].id = str(uuid.uuid4())
                     mongo_list.append(task.to_mongo())
+                    print(5)
+
             task_user.insert_many(mongo_list)
 
-            task.assigned_to.extend(will_assign_employees)
-            task.save()
+            return Response({"Success"}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -393,9 +398,6 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
             if not task_id or not user_id:
                 return Response({"error": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
-
-            if not request.user.is_manager:
-                return Response({"error": "Only manager can assign tasks"}, status=status.HTTP_400_BAD_REQUEST)
 
             will_withdraw_employees = request.data.get("assigned_to")
 
@@ -413,13 +415,9 @@ class ManagerTaskViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     def destroy(self, request, pk=None):
         if pk is None:
             return Response({"error": "pk not provided"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not request.user.is_manager:
-            return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             task = Task.objects.get(id=pk)
@@ -477,8 +475,6 @@ class ManagerTaskViewSet(viewsets.ViewSet):
         if task_id is None:
             return Response({"error": "task_id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not request.user.is_manager:
-            return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             task = Task.objects.get(id=pk)
@@ -500,7 +496,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
 # FILE
 
-class FileView(APIView):
+class FieldView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = FileSerializer
 
@@ -554,9 +550,18 @@ class FileView(APIView):
                 represent_name, file_extension = os.path.splitext(up_file.name)
                 name = str(uuid.uuid4()) + file_extension
                 destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
+
+                print(file)
+
+                delete_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', file.name)
+
+                if os.path.isfile(delete_path):
+                    os.remove(delete_path)
+
                 with open(destination_path, 'wb+') as destination:
                     for chunk in up_file.chunks():
                         destination.write(chunk)
+
                 update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
                                     field_id=field_id, represented_name=represent_name)
 
@@ -626,6 +631,8 @@ class FileView(APIView):
         file.updated_by_id = request.user.id
         file.save()
 
+        update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content="")
+
         return Response({"message": "File deleted"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -651,11 +658,15 @@ class FileView(APIView):
             if (not task_id) or (not field_id):
                 return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not content:
-                return Response({"error": "Content cannot be empty"}, status=status.HTTP_400_BAD_REQUEST)
+            tu = update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content=content)
 
-            update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content=content)
+            for field in tu.fields:
+                if field.id == field_id:
+                    return Response({"message": "Field updated successfully", "updated_at": field.updated_at},
+                                    status=status.HTTP_200_OK)
 
             return Response({"message": "Field updated successfully"}, status=status.HTTP_200_OK)
+
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

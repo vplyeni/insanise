@@ -60,9 +60,3 @@ class TaskUser(Document):
     company_id = IntField(required=True)
 
     due_date = DateTimeField(default=datetime.now)
-
-    def set_due_date(self, date_str):
-        self.due_date = datetime.strptime(date_str, '%d-%m-%Y')
-
-    def get_due_date(self):
-        return self.due_date.strftime('%d-%m-%Y')
