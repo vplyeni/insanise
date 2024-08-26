@@ -247,80 +247,7 @@ class TaskView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskSerializer
 
-    def delete(self, request, _id, *args, **kwargs):
-        if not request.user.is_manager:
-            return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            task = Task.objects.get(id=_id)
-
-            if task is None:
-                return Response("Task not found", status=status.HTTP_404_NOT_FOUND)
-
-            task.delete()
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response("Task deleted successfully", status=status.HTTP_200_OK)
-
-    @extend_schema(
-        request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'name': {'type': 'string'},
-                    'description': {'type': 'string'},
-                    'fields': {'type': 'array', 'items': {'type': 'object',
-                                                          'properties': {'name': {'type': 'string'},
-                                                                         'type': {'type': 'string'},
-                                                                         }
-                                                          }
-                               },
-                    'assigned_to': {'type': 'array', 'items': {'type': 'integer'}}
-                },
-                'required': ['name', 'description', 'fields', 'user_ids'],
-            },
-        },
-        responses={
-            200: OpenApiResponse(
-                description="Task created successfully",
-                examples={
-                    'application/json': {
-                        'task': {
-                            'id': 'string',
-                            'name': 'string',
-                            'description': 'string',
-                            'fields': [
-                                {'type': 'string', 'name': 'string'}
-                            ],
-                        }
-                    }
-                }
-            ),
-            500: OpenApiResponse(description="Internal Server Error"),
-        },
-    )
-    def put(self, request, _id, *args, **kwargs):
-        if not request.user.is_manager:
-            return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            task = Task.objects.get(id=_id)
-            data = request.data
-            data["updated_by"] = request.user.id
-            data["updated_at"] = datetime.datetime.now()
-            data["created_by"] = task.created_by
-            data["created_at"] = task.created_at
-
-            serializer = self.serializer_class(data=data)
-            if serializer.is_valid(raise_exception=True):
-                task.update(**serializer.validated_data)
-                task.reload()  # Refresh the document with updated data
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except DoesNotExist:
-            return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class ManagerTaskViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -485,6 +412,90 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def destroy(self, request, pk=None):
+        if pk is None:
+            return Response({"error": "pk not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not request.user.is_manager:
+            return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            task = Task.objects.get(id=pk)
+
+            if task is None:
+                return Response("Task not found", status=status.HTTP_404_NOT_FOUND)
+
+            task.delete()
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response("Task deleted successfully", status=status.HTTP_200_OK)
+
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'name': {'type': 'string'},
+                    'description': {'type': 'string'},
+                    'fields': {'type': 'array', 'items': {'type': 'object',
+                                                          'properties': {'name': {'type': 'string'},
+                                                                         'type': {'type': 'string'},
+                                                                         }
+                                                          }
+                               },
+                    'assigned_to': {'type': 'array', 'items': {'type': 'integer'}}
+                },
+                'required': ['name', 'description', 'fields', 'user_ids'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(
+                description="Task created successfully",
+                examples={
+                    'application/json': {
+                        'task': {
+                            'id': 'string',
+                            'name': 'string',
+                            'description': 'string',
+                            'fields': [
+                                {'type': 'string', 'name': 'string'}
+                            ],
+                        }
+                    }
+                }
+            ),
+            500: OpenApiResponse(description="Internal Server Error"),
+        },
+    )
+    def update(self, request, pk=None):
+        task_id = str(request.query_params.get('task_id'))
+
+        if task_id is None:
+            return Response({"error": "task_id not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not request.user.is_manager:
+            return Response("User is not authorized", status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            task = Task.objects.get(id=pk)
+            data = request.data
+            data["updated_by"] = request.user.id
+            data["updated_at"] = datetime.datetime.now()
+            data["created_by"] = task.created_by
+            data["created_at"] = task.created_at
+
+            serializer = self.serializer_class(data=data)
+            if serializer.is_valid(raise_exception=True):
+                task.update(**serializer.validated_data)
+                task.reload()  # Refresh the document with updated data
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except DoesNotExist:
+            return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 # FILE
