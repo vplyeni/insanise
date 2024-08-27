@@ -34,16 +34,20 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='skip', description='Number of items to skip', required=True, type=OpenApiTypes.INT),
-            OpenApiParameter(name='limit', description='Maximum number of items to return', required=True,
+            OpenApiParameter(name='skip', description='Number of items to skip', required=False, type=OpenApiTypes.INT),
+            OpenApiParameter(name='limit', description='Maximum number of items to return', required=False,
                              type=OpenApiTypes.INT),
+            OpenApiParameter(name='search', description='Search', required=False,
+                             type=OpenApiTypes.STR),
         ],
     )
     def list(self, request):
         skip = 0
         limit = 5
+        search = ""
 
         try:
+            skip = int(request.query_params.get('search'))
             skip = int(request.query_params.get('skip'))
             limit = int(request.query_params.get('limit'))
         except Exception as e:
