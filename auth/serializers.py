@@ -1,15 +1,10 @@
 from rest_framework import serializers
 from company.models import Employee
 
-class EmployeeSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()
-
+class EmployeeAuthSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'email', 'position', 'department', 'date_of_birth', 'company', 'target_group', 'team', 'is_manager', 'is_superuser']
-
-    def get_full_name(self, obj):
-        return f"{obj.first_name} {obj.last_name}"
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'position', 'department', 'date_of_birth', 'company', 'target_group', 'team', 'is_manager', 'is_superuser']
 
 class NoOpSerializer(serializers.Serializer):
     def to_representation(self, instance):

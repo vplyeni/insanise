@@ -1,4 +1,6 @@
 from django.contrib.auth.hashers import make_password
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from .models import Company, TargetGroup, Team, Employee
 
@@ -39,3 +41,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
         # Remove the password field from the output
         ret.pop('password', None)
         return ret
+
+
+class EmployeeSearchSerializer(serializers.Serializer):
+    search = serializers.CharField()
+    selected_employees = serializers.ListField(child=serializers.IntegerField())

@@ -251,6 +251,7 @@ class TaskListView(APIView):
 class ManagerTaskViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated, IsManager]
     serializer_class = ManagerTaskSerializer
+    queryset = Task.objects.all()
 
     @extend_schema(
         parameters=[
@@ -356,7 +357,8 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),
                           "created_by": request.user.id, "updated_by": request.user.id,
                           "company_id": request.user.company_id, "status": "New",
-                          "due_date": (datetime.datetime.now() + datetime.timedelta(seconds=assigned_period)).strftime("%Y-%m-%d %H:%M:%S"),}
+                          "due_date": (datetime.datetime.now() + datetime.timedelta(seconds=assigned_period)).strftime(
+                              "%Y-%m-%d %H:%M:%S"), }
             print(2)
             for assigned in will_assign_employees:
                 print(3)
@@ -475,7 +477,6 @@ class ManagerTaskViewSet(viewsets.ViewSet):
         if task_id is None:
             return Response({"error": "task_id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-
         try:
             task = Task.objects.get(id=pk)
             data = request.data
@@ -492,8 +493,6 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
             return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
-
-
 # FILE
 
 class FieldView(APIView):
@@ -551,8 +550,6 @@ class FieldView(APIView):
                 name = str(uuid.uuid4()) + file_extension
                 destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
 
-                print(file)
-
                 delete_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', file.name)
 
                 if os.path.isfile(delete_path):
@@ -562,8 +559,8 @@ class FieldView(APIView):
                     for chunk in up_file.chunks():
                         destination.write(chunk)
 
-                update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
-                                    field_id=field_id, represented_name=represent_name)
+                tu = update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
+                                         field_id=field_id, represented_name=represent_name)
 
                 """
                 TO DO: task check
@@ -587,8 +584,19 @@ class FieldView(APIView):
 
                 File.objects.create(**data)
 
-                return Response({"name": name, "represent_name": represent_name + file_extension},
+                for field in tu.fields:
+                    if field.id == field_id:
+                        if str(tu.updated_at).endswith("Z"):
+                            return Response(
+                                {"name": name, "represent_name": represent_name + file_extension,
+                                 "updated_at": str(field.updated_at)},
                                 status=status.HTTP_201_CREATED)
+                        else:
+                            return Response(
+                                {"name": name, "represent_name": represent_name + file_extension,
+                                 "updated_at": str(field.updated_at) + "Z"},
+                                status=status.HTTP_201_CREATED)
+
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -662,8 +670,14 @@ class FieldView(APIView):
 
             for field in tu.fields:
                 if field.id == field_id:
-                    return Response({"message": "Field updated successfully", "updated_at": field.updated_at},
-                                    status=status.HTTP_200_OK)
+                    if str(field.updated_at).endswith("Z"):
+                        return Response(
+                            {"message": "Field updated successfully", "updated_at": str(field.updated_at)},
+                            status=status.HTTP_200_OK)
+                    else:
+                        return Response(
+                            {"message": "Field updated successfully", "updated_at": str(field.updated_at) + "Z"},
+                            status=status.HTTP_200_OK)
 
             return Response({"message": "Field updated successfully"}, status=status.HTTP_200_OK)
 

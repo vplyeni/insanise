@@ -2,11 +2,13 @@
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .models import Company, TargetGroup, Team, Employee
 from .permissions import IsManager, IsSuperUser
-from .serializers import CompanySerializer, TargetGroupSerializer, TeamSerializer, EmployeeSerializer
+from .serializers import CompanySerializer, TargetGroupSerializer, TeamSerializer, EmployeeSerializer, \
+    EmployeeSearchSerializer
 
 
 class CompanyViewSet(viewsets.ModelViewSet):
@@ -37,17 +39,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             OpenApiParameter(name='skip', description='Number of items to skip', required=False, type=OpenApiTypes.INT),
             OpenApiParameter(name='limit', description='Maximum number of items to return', required=False,
                              type=OpenApiTypes.INT),
-            OpenApiParameter(name='search', description='Search', required=False,
-                             type=OpenApiTypes.STR),
         ],
     )
     def list(self, request):
         skip = 0
         limit = 5
-        search = ""
 
         try:
-            skip = int(request.query_params.get('search'))
             skip = int(request.query_params.get('skip'))
             limit = int(request.query_params.get('limit'))
         except Exception as e:
@@ -62,3 +60,16 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             return Response({'data': serialized_employees.data, 'count': count}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='skip', description='Number of items to skip', required=False, type=OpenApiTypes.INT),
+            OpenApiParameter(name='limit', description='Maximum number of items to return', required=False,
+                             type=OpenApiTypes.INT),
+        ],
+
+    )
+    @action(methods=["GET"], detail=False)
+    def search(self, request, *args, **kwargs):
+        return Response({'data': Employee.objects.all(), 'count': Employee.objects.count()})
