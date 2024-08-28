@@ -352,6 +352,9 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
             task = Task.objects.get(id=ObjectId(task_id))
 
+            if assigned_period is None:
+                assigned_period = task.task_period
+
             mongo_list = []
             print(1)
             mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),

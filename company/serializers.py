@@ -32,6 +32,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         # Hash the password before saving
         if 'password' in data:
             data['password'] = make_password(data['password'])
+        data['full_name'] = data['first_name'] + ' ' + data['last_name']
         return super().to_internal_value(data)
 
     def to_representation(self, instance):
@@ -44,5 +45,5 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 
 class EmployeeSearchSerializer(serializers.Serializer):
-    search = serializers.CharField()
-    selected_employees = serializers.ListField(child=serializers.IntegerField())
+    search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    selected_employees = serializers.ListField(child=serializers.IntegerField(),required=False)

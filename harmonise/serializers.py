@@ -112,5 +112,5 @@ class FileSerializer(serializers.Serializer):
 
 class AssignAndWithdrawSerializer(serializers.Serializer):
     task_id = serializers.CharField(required=True)
-    assigned_period = serializers.IntegerField(required=True)
+    assigned_period = serializers.IntegerField(required=False, allow_null=True)
     assigned_to = serializers.ListField(child=serializers.IntegerField())

@@ -61,15 +61,50 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     @extend_schema(
         parameters=[
             OpenApiParameter(name='skip', description='Number of items to skip', required=False, type=OpenApiTypes.INT),
             OpenApiParameter(name='limit', description='Maximum number of items to return', required=False,
                              type=OpenApiTypes.INT),
         ],
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {'search': {'type': 'string'},
+                               'selected_employees': {'type': 'array', 'items': {'type': 'integer'}
+                                                      },
+                               'required': ['search', 'selected_employees'],
+                               },
+            }
+        }
 
     )
-    @action(methods=["GET"], detail=False)
+    @action(methods=["POST"], detail=False)
     def search(self, request, *args, **kwargs):
-        return Response({'data': Employee.objects.all(), 'count': Employee.objects.count()})
+        search_text = ""
+        selected_employees = []
+
+        search_serializer = EmployeeSearchSerializer(data=request.data)
+        search_serializer.is_valid(raise_exception=True)
+
+        if search_serializer.validated_data.get('search') is not None:
+            search_text = search_serializer.validated_data.get('search')
+
+        if search_serializer.validated_data.get('selected_employees') is not None:
+            selected_employees = search_serializer.validated_data.get('selected_employees')
+
+        skip = 0
+        limit = 5
+
+        try:
+            skip = int(request.query_params.get('skip'))
+            limit = int(request.query_params.get('limit'))
+        except Exception as e:
+            print(e)
+
+        count = Employee.objects.exclude(id__in=selected_employees).filter(full_name__icontains=search_text).count()
+        employees = Employee.objects.exclude(id__in=selected_employees).filter(
+            full_name__icontains=search_text).order_by('id')
+        employee_serializer = self.serializer_class(employees, many=True)
+
+        return Response({'data': employee_serializer.data, 'count': count}, status=status.HTTP_200_OK)
