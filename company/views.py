@@ -28,6 +28,25 @@ class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
     permission_classes = [permissions.IsAuthenticated, IsManager]
 
+    def list(self, request, *args, **kwargs):
+        skip = 0
+        limit = 5
+
+        try:
+            if request.query_params.get('skip') is not None and request.query_params.get('limit') is not None:
+                skip = int(request.query_params.get('skip'))
+                limit = int(request.query_params.get('limit'))
+        except Exception as e:
+            print(e)
+
+        teams = self.queryset.all().order_by('id')[skip:skip + limit]
+        count = self.queryset.all().count()
+
+        teams_serializer = TeamSerializer(teams, many=True)
+
+        return Response({"data": teams_serializer.data, "count": count}, status=status.HTTP_200_OK)
+
+
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
@@ -123,6 +142,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(methods=["POST"], detail=False)
+    def create_employee(self, request, *args, **kwargs):
+        pass
 
     """"
     def update(self, request, pk=None, *args, **kwargs):
