@@ -28,6 +28,9 @@ def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""
     if task_user is None:
         raise Exception("User Field not found")
 
+    if task_user.status == "Complete":
+        raise Exception("User Field already Complete")
+
     changed = False
 
     if represented_name == "":
@@ -354,13 +357,13 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             if assigned_task.assigned_to is None:
                 assigned_task.assigned_to = []
 
-            mylist = []
+            confirmed_will_assign_employees = []
 
             for i in will_assign_employees:
                 if not (i in assigned_task.assigned_to):
-                    mylist.append(i)
+                    confirmed_will_assign_employees.append(i)
 
-            assigned_task.assigned_to.extend(mylist)
+            assigned_task.assigned_to.extend(confirmed_will_assign_employees)
 
             if assigned_period is None:
                 assigned_period = assigned_task.task_period
@@ -374,7 +377,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                           "due_date": (datetime.datetime.now() + datetime.timedelta(seconds=assigned_period)).strftime(
                               "%Y-%m-%d %H:%M:%S"), }
             print(2)
-            for assigned in will_assign_employees:
+            for assigned in confirmed_will_assign_employees:
                 print(3)
                 fields = [
                     {
@@ -399,7 +402,8 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                     mongo_list.append(task.to_mongo())
                     print(5)
             assigned_task.save()
-            task_user.insert_many(mongo_list)
+            if len(mongo_list) > 0:
+                task_user.insert_many(mongo_list)
 
             return Response({"Success"}, status=status.HTTP_200_OK)
 
@@ -507,7 +511,6 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
             return Response({"message": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 # FILE
 
