@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'company',
     'harmonise',
     'mongocon',
+    'leave',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
