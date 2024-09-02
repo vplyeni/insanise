@@ -22,6 +22,24 @@ class TargetGroupViewSet(viewsets.ModelViewSet):
     serializer_class = TargetGroupSerializer
     permission_classes = [permissions.IsAuthenticated, IsManager]
 
+    def list(self, request, *args, **kwargs):
+        skip = 0
+        limit = 5
+
+        try:
+            if request.query_params.get('skip') is not None and request.query_params.get('limit') is not None:
+                skip = int(request.query_params.get('skip'))
+                limit = int(request.query_params.get('limit'))
+        except Exception as e:
+            print(e)
+
+        target_groups = self.queryset.all().order_by('id')[skip:skip + limit]
+        count = self.queryset.all().count()
+
+        target_groups = self.serializer_class(target_groups, many=True)
+
+        return Response({"data": target_groups.data, "count": count}, status=status.HTTP_200_OK)
+
 
 class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
@@ -42,10 +60,9 @@ class TeamViewSet(viewsets.ModelViewSet):
         teams = self.queryset.all().order_by('id')[skip:skip + limit]
         count = self.queryset.all().count()
 
-        teams_serializer = TeamSerializer(teams, many=True)
+        teams_serializer = self.serializer_class(teams, many=True)
 
         return Response({"data": teams_serializer.data, "count": count}, status=status.HTTP_200_OK)
-
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -163,8 +180,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)"""
 
-
-
     def destroy(self, request, pk=None, *args, **kwargs):
         try:
             employee = self.get_object()
@@ -187,4 +202,3 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         return Response({'employees': serializer.validated_data}, status=status.HTTP_200_OK)
-
