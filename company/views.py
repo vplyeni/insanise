@@ -123,6 +123,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
     """"
     def update(self, request, pk=None, *args, **kwargs):
         try:
@@ -140,10 +141,28 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)"""
 
+
+
     def destroy(self, request, pk=None, *args, **kwargs):
         try:
             employee = self.get_object()
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(methods=["POST"], detail=False)
+    def get_employee_by_id_list(self, request, *args, **kwargs):
+        list = []
+
+        if request.data.get("employees"):
+            list = request.data.get("employees")
+        else:
+            return Response({'error': 'Employee list field is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        employees = Employee.objects.filter(id__in=list)
+
+        serializer = self.serializer_class(employees, many=True)
+
+        serializer.is_valid(raise_exception=True)
+
+        return Response({'employees': serializer.validated_data}, status=status.HTTP_200_OK)
 

@@ -5,6 +5,8 @@ import uuid
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 
+from company.models import Employee
+from company.serializers import EmployeeSerializer
 from mongocon.connection import task_user
 from bson import ObjectId
 from django.http import FileResponse
@@ -241,8 +243,8 @@ class TaskListView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            tasks = TaskUser.objects(user_id=request.user.id)[skip:limit + skip]
-            count = TaskUser.objects(user_id=request.user.id).count()
+            tasks = TaskUser.objects(user_id=request.user.id, status__ne="Complete")[skip:limit + skip]
+            count = TaskUser.objects(user_id=request.user.id, status__ne="Complete").count()
 
             serialized_tasks = TaskUserSerializer(tasks, many=True)
 
@@ -261,25 +263,44 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             OpenApiParameter(name='skip', description='Number of items to skip', required=True, type=OpenApiTypes.INT),
             OpenApiParameter(name='limit', description='Maximum number of items to return', required=True,
                              type=OpenApiTypes.INT),
+            OpenApiParameter(name='type', description='Type of items to return', required=False,
+                             type=OpenApiTypes.INT),
         ],
     )
     def list(self, request, *args, **kwargs):
         skip = 0
-        limit = 0
+        limit = 5
+
+        type = 0
 
         try:
             skip = int(request.query_params.get('skip'))
             limit = int(request.query_params.get('limit'))
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            print(e)
 
         try:
-            tasks = Task.objects()[skip:limit + skip]
-            count = Task.objects().count()
+            if request.query_params.get('type'):
+                type = int(request.query_params.get('type'))
+        except Exception as e:
+            print(e)
 
-            serialized_tasks = self.serializer_class(tasks, many=True)
+        try:
+            if type == 0:
+                tasks = Task.objects()[skip:limit + skip]
+                count = Task.objects().count()
 
-            return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
+                serialized_tasks = self.serializer_class(tasks, many=True)
+
+                return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
+            elif type == 1:
+                tasks = TaskUser.objects(status="Complete")[skip:limit + skip]
+                count = TaskUser.objects(status="Complete").count()
+
+                serialized_tasks = TaskUserSerializer(tasks, many=True)
+
+                return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -357,13 +378,17 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             if assigned_task.assigned_to is None:
                 assigned_task.assigned_to = []
 
-            confirmed_will_assign_employees = []
+            waiting_will_assign_employees = []
 
             for i in will_assign_employees:
                 if not (i in assigned_task.assigned_to):
-                    confirmed_will_assign_employees.append(i)
+                    waiting_will_assign_employees.append(i)
 
-            assigned_task.assigned_to.extend(confirmed_will_assign_employees)
+            employees = Employee.objects.filter(id__in=waiting_will_assign_employees).all()
+
+            employee_serializer = EmployeeSerializer(employees, many=True)
+
+            assigned_task.assigned_to.extend(map(lambda x: x.get('id'), employee_serializer.data))
 
             if assigned_period is None:
                 assigned_period = assigned_task.task_period
@@ -377,7 +402,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                           "due_date": (datetime.datetime.now() + datetime.timedelta(seconds=assigned_period)).strftime(
                               "%Y-%m-%d %H:%M:%S"), }
             print(2)
-            for assigned in confirmed_will_assign_employees:
+            for assigned in employee_serializer.data:
                 print(3)
                 fields = [
                     {
@@ -391,7 +416,13 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                 ]
                 mongo_data["fields"] = fields
                 print(4)
-                mongo_data["user_id"] = assigned
+                mongo_data["user_id"] = assigned.get('id')
+                mongo_data["user_full_name"] = assigned.get('first_name') + " " + assigned.get('last_name')
+                mongo_data["username"] = assigned.get('username') + " " + assigned.get('username')
+                """
+                    user_full_name = StringField(required=True)
+    username = StringField(required=True)
+    """
                 task_user_serializer = TaskUserSerializer(data=mongo_data)
                 print(4.1)
                 if task_user_serializer.is_valid(raise_exception=True):
@@ -512,15 +543,17 @@ class ManagerTaskViewSet(viewsets.ViewSet):
         except DoesNotExist:
             return Response({"message": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
 # FILE
 
-class FieldView(APIView):
+class FieldView(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = FileSerializer
 
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def post(self, request, *args, **kwargs):
+    @action(detail=False, methods=["POST"])
+    def file(self, request, *args, **kwargs):
         try:
             task_id = str(request.query_params.get('task_id'))
             field_id = str(request.query_params.get('field_id'))
@@ -540,8 +573,8 @@ class FieldView(APIView):
                     for chunk in up_file.chunks():
                         destination.write(chunk)
 
-                update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
-                                    field_id=field_id, represented_name=represent_name)
+                tu = update_field_by_ids(content=name, task_id=task_id, user_id=request.user.id,
+                                         field_id=field_id, represented_name=represent_name)
 
                 """
                 
@@ -560,6 +593,19 @@ class FieldView(APIView):
                     "field_id": field_id,
                 }
                 File.objects.create(**data)
+
+                for field in tu.fields:
+                    if field.id == field_id:
+                        if str(tu.updated_at).endswith("Z"):
+                            return Response(
+                                {"name": name, "represent_name": represent_name + file_extension,
+                                 "updated_at": str(field.updated_at)},
+                                status=status.HTTP_201_CREATED)
+                        else:
+                            return Response(
+                                {"name": name, "represent_name": represent_name + file_extension,
+                                 "updated_at": str(field.updated_at) + "Z"},
+                                status=status.HTTP_201_CREATED)
 
                 return Response({"name": name, "represent_name": represent_name + file_extension},
                                 status=status.HTTP_201_CREATED)
@@ -620,18 +666,15 @@ class FieldView(APIView):
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def get(self, request, *args, **kwargs):
+    #NOT USED COMMENTED OUT
+    """ def retrieve(self, request, *args, **kwargs):
+
         task_id = str(request.query_params.get('task_id'))
         field_id = str(request.query_params.get('field_id'))
         user_id = request.user.id
 
         if (not task_id) or (not field_id):
             return Response({"message": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
-
-        """
-        TO DO: task check
-
-        """
 
         file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
                                    is_updated=False).first()
@@ -641,7 +684,7 @@ class FieldView(APIView):
 
         return FileResponse(open("/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/" + file.name, 'rb'))
 
-    def delete(self, request, *args, **kwargs):
+    def destroy(self, request, *args, **kwargs):
         task_id = str(request.query_params.get('task_id'))
         field_id = str(request.query_params.get('field_id'))
 
@@ -661,7 +704,9 @@ class FieldView(APIView):
         update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content="")
 
         return Response({"message": "File deleted"}, status=status.HTTP_200_OK)
+    """
 
+    @action(detail=False, methods=['PUT'])
     @extend_schema(
         request={
             'application/json': {
@@ -676,7 +721,7 @@ class FieldView(APIView):
         },
         responses={200: OpenApiTypes.OBJECT}  # Modify response type based on your needs
     )
-    def put(self, request, *args, **kwargs):
+    def text(self, request, *args, **kwargs):
         try:
             task_id = request.data.get('task_id')
             field_id = request.data.get('field_id')
@@ -703,3 +748,34 @@ class FieldView(APIView):
 
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['POST'])
+    def complete(self, request, *args, **kwargs):
+        try:
+            task_id = str(request.query_params.get('task_id'))
+            user_id = request.user.id
+
+            if (not task_id) or (not user_id):
+                return Response({"message": "User id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            task_user = TaskUser.objects.get(task_id=task_id, user_id=user_id)
+
+            if task_user is None:
+                raise Exception("User Field not found")
+
+            if task_user.status == "Complete":
+                raise Exception("User Field already Complete")
+
+            for field in task_user.fields:
+                if field.content == "":
+                    raise Exception("Field content is empty")
+
+            task_user.status = "Complete"
+            task_user.save()
+
+            return Response({"message": "Task Completed successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+

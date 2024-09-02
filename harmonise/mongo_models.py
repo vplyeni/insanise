@@ -46,6 +46,8 @@ class TaskFieldModel(EmbeddedDocument):
 class TaskUser(Document):
     task_id = StringField(required=True)
     user_id = IntField(required=True)
+    user_full_name = StringField(required=True)
+    username = StringField(required=True)
 
     name = StringField(max_length=200, required=True)
     description = StringField(max_length=1000, required=True)

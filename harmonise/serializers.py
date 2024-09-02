@@ -78,6 +78,9 @@ class TaskUserSerializer(serializers.Serializer):
     task_id = serializers.CharField(required=True)
     user_id = serializers.IntegerField(required=True)
 
+    user_full_name = serializers.CharField(required=True)
+    username = serializers.CharField(required=True)
+
     name = serializers.CharField(max_length=200, required=True)
     description = serializers.CharField(max_length=1000, required=True)
     fields = TaskFieldModelSerializer(many=True)
