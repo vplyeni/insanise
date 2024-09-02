@@ -108,3 +108,42 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee_serializer = self.serializer_class(employees, many=True)
 
         return Response({'data': employee_serializer.data, 'count': count}, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            if not request.user.is_superuser:
+                serializer.data["company_id"] = request.user.company_id
+                serializer.data["is_superuser"] = False
+
+            Employee.objects.create(**serializer.validated_data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    """"
+    def update(self, request, pk=None, *args, **kwargs):
+        try:
+            employee = self.get_object()
+
+            request.data["password"] = employee.password
+
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=False)
+            self.check_object_permissions(request, serializer.data)
+
+            Employee.objects.update(**serializer.data)
+
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)"""
+
+    def destroy(self, request, pk=None, *args, **kwargs):
+        try:
+            employee = self.get_object()
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

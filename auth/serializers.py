@@ -1,10 +1,26 @@
 from rest_framework import serializers
 from company.models import Employee
 
+
 class EmployeeAuthSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'position', 'department', 'date_of_birth', 'company', 'target_group', 'team', 'is_manager', 'is_superuser']
+        fields = ['id', 'username', 'full_name', 'first_name', 'last_name', 'email', 'position', 'department', 'date_of_birth',
+                  'company', 'target_group', 'team', 'is_manager', 'is_superuser']
+
+    def to_representation(self, instance):
+        # Get the standard representation from the parent class
+        ret = super().to_representation(instance)
+        if ret['full_name'] is None or ret['full_name'] != ret['first_name'] + ' ' + ret['last_name']:
+            ret['full_name'] = ret['first_name'] + ' ' + ret['last_name']
+
+        return ret
+
+
+class EmployeeChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField()
+    new_password = serializers.CharField()
+
 
 class NoOpSerializer(serializers.Serializer):
     def to_representation(self, instance):

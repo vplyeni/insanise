@@ -38,7 +38,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         # Get the standard representation from the parent class
         ret = super().to_representation(instance)
-
+        if ret['full_name'] is None or ret['full_name'] != ret['first_name'] + ' ' + ret['last_name']:
+            ret['full_name'] = ret['first_name'] + ' ' + ret['last_name']
         # Remove the password field from the output
         ret.pop('password', None)
         return ret

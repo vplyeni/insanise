@@ -106,7 +106,7 @@ class TaskUserListView(APIView):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({
-                "error": str(e),
+                "message": str(e),
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -193,7 +193,7 @@ class TaskUserView(APIView):
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
-            return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def get(self, request, task_id, *args, **kwargs):
         task_id = str(task_id)
@@ -330,7 +330,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                 task.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(methods=["post"], detail=False, serializer_class=AssignAndWithdrawSerializer)
     def assign_task(self, request, *args, **kwargs):
@@ -348,16 +348,27 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             user_id = request.user.id
 
             if not task_id or not user_id:
-                return Response({"error": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-            task = Task.objects.get(id=ObjectId(task_id))
+            assigned_task = Task.objects.get(id=ObjectId(task_id))
+            if assigned_task.assigned_to is None:
+                assigned_task.assigned_to = []
+
+            mylist = []
+
+            for i in will_assign_employees:
+                if not (i in assigned_task.assigned_to):
+                    mylist.append(i)
+
+            assigned_task.assigned_to.extend(mylist)
 
             if assigned_period is None:
-                assigned_period = task.task_period
+                assigned_period = assigned_task.task_period
 
             mongo_list = []
             print(1)
-            mongo_data = {"name": task.name, "description": task.description, "task_id": str(task.id),
+            mongo_data = {"name": assigned_task.name, "description": assigned_task.description,
+                          "task_id": str(assigned_task.id),
                           "created_by": request.user.id, "updated_by": request.user.id,
                           "company_id": request.user.company_id, "status": "New",
                           "due_date": (datetime.datetime.now() + datetime.timedelta(seconds=assigned_period)).strftime(
@@ -373,7 +384,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                         "content": "",
                         "represented_name": ""
                     }
-                    for i in task.fields
+                    for i in assigned_task.fields
                 ]
                 mongo_data["fields"] = fields
                 print(4)
@@ -387,13 +398,13 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                         task.fields[i].id = str(uuid.uuid4())
                     mongo_list.append(task.to_mongo())
                     print(5)
-
+            assigned_task.save()
             task_user.insert_many(mongo_list)
 
             return Response({"Success"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(methods=["post"], detail=False)
     def withdraw_task(self, request, *args, **kwargs):
@@ -402,7 +413,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             user_id = request.user.id
 
             if not task_id or not user_id:
-                return Response({"error": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Task id or user id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
             will_withdraw_employees = request.data.get("assigned_to")
 
@@ -418,11 +429,11 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                             status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def destroy(self, request, pk=None):
+    def destroy(self, request, pk=None, *args, **kwargs):
         if pk is None:
-            return Response({"error": "pk not provided"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "pk not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             task = Task.objects.get(id=pk)
@@ -433,7 +444,7 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             task.delete()
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response("Task deleted successfully", status=status.HTTP_200_OK)
 
@@ -474,11 +485,11 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             500: OpenApiResponse(description="Internal Server Error"),
         },
     )
-    def update(self, request, pk=None):
+    def update(self, request, pk=None, *args, **kwargs):
         task_id = str(request.query_params.get('task_id'))
 
         if task_id is None:
-            return Response({"error": "task_id not provided"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "task_id not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             task = Task.objects.get(id=pk)
@@ -495,7 +506,9 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
-            return Response({"error": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "TaskUser not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
 # FILE
 
 class FieldView(APIView):
@@ -510,7 +523,7 @@ class FieldView(APIView):
             field_id = str(request.query_params.get('field_id'))
 
             if (task_id == "") or (field_id == ""):
-                return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
             file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
                                        is_updated=False).first()
@@ -602,7 +615,7 @@ class FieldView(APIView):
 
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get(self, request, *args, **kwargs):
         task_id = str(request.query_params.get('task_id'))
@@ -610,7 +623,7 @@ class FieldView(APIView):
         user_id = request.user.id
 
         if (not task_id) or (not field_id):
-            return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
         """
         TO DO: task check
@@ -621,7 +634,7 @@ class FieldView(APIView):
                                    is_updated=False).first()
 
         if file is None:
-            return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "File not found"}, status=status.HTTP_404_NOT_FOUND)
 
         return FileResponse(open("/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/" + file.name, 'rb'))
 
@@ -630,13 +643,13 @@ class FieldView(APIView):
         field_id = str(request.query_params.get('field_id'))
 
         if (not task_id) or (not field_id):
-            return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
         file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
                                    is_updated=False).first()
 
         if file is None:
-            return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "File not found"}, status=status.HTTP_404_NOT_FOUND)
 
         file.is_updated = True
         file.updated_by_id = request.user.id
@@ -667,7 +680,7 @@ class FieldView(APIView):
             content = request.data.get('content')
 
             if (not task_id) or (not field_id):
-                return Response({"error": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
             tu = update_field_by_ids(task_id=task_id, field_id=field_id, user_id=request.user.id, content=content)
 
@@ -686,4 +699,4 @@ class FieldView(APIView):
 
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

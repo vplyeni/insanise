@@ -78,6 +78,7 @@ class Team(models.Model):
 
 class Employee(AbstractUser):
     full_name = models.CharField(max_length=255, blank=True, null=True)
+    password = models.CharField(max_length=128, blank=True, null=True)
     # Additional fields for Employee
     position = models.CharField(max_length=100, blank=True, null=True)
     department = models.CharField(max_length=100, blank=True, null=True)
