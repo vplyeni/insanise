@@ -86,8 +86,10 @@ class Employee(AbstractUser):
 
     is_manager = models.BooleanField(default=False)
 
-    manager_user = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
-
+    leave_manager = models.ForeignKey('self', on_delete=models.SET_NULL, related_name='managed_employees', null=True,
+                                      blank=True)
+    manager_user = models.ForeignKey('self', on_delete=models.SET_NULL, related_name='direct_reports', null=True,
+                                     blank=True)
     # ForeignKey fields
     company = models.ForeignKey(Company, null=True, blank=True,on_delete=models.CASCADE)
     target_group = models.ForeignKey(TargetGroup, null=True, blank=True, on_delete=models.SET_NULL)
