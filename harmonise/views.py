@@ -4,6 +4,7 @@ import uuid
 
 from rest_framework.decorators import action
 from rest_framework.views import APIView
+from mailer import mailer
 
 from company.models import Employee
 from company.serializers import EmployeeSerializer
@@ -436,6 +437,10 @@ class ManagerTaskViewSet(viewsets.ViewSet):
             if len(mongo_list) > 0:
                 task_user.insert_many(mongo_list)
 
+            for assigned in employee_serializer.data:
+                print(6)
+                mailer.send(assigned.get('email'), "New Task Assigned to You", 'new task')
+            print(7)
             return Response({"Success"}, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -776,6 +781,3 @@ class FieldView(viewsets.ViewSet):
             return Response({"message": "Task Completed successfully"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-

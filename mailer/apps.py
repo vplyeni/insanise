@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class SendemailConfig(AppConfig):
+class MailerConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'sendemail'
+    name = 'mailer'
