@@ -23,6 +23,7 @@ from .serializers import TaskUserSerializer, TaskSerializer, FileSerializer, Man
     AssignAndWithdrawSerializer
 from company.permissions import IsManager, IsSuperUser
 
+allowed_field_types = ["plain_text", "long_text", "file-png,jpeg,jpg.", "file-zip.", "file-pdf."]
 
 # Common Function across views.
 def update_field_by_ids(content, task_id, user_id, field_id, represented_name=""):
@@ -351,6 +352,9 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
             serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
+                for field in serializer.validated_data.get("fields"):
+                    if not field.get("type") in allowed_field_types:
+                        return Response({"error": f"Field type {field.get('type')} not allowed"},status=status.HTTP_400_BAD_REQUEST)
                 task = Task(**serializer.validated_data)
                 task.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -432,15 +436,22 @@ class ManagerTaskViewSet(viewsets.ViewSet):
                     for i in range(len(task.fields)):
                         task.fields[i].id = str(uuid.uuid4())
                     mongo_list.append(task.to_mongo())
-                    print(5)
             assigned_task.save()
             if len(mongo_list) > 0:
                 task_user.insert_many(mongo_list)
 
             for assigned in employee_serializer.data:
-                print(6)
-                mailer.send(assigned.get('email'), "New Task Assigned to You", 'new task')
-            print(7)
+                content = str('Dear ' + str(assigned.get('first_name') + " " + assigned.get('last_name'))
+                              + ",\n"+"A New Task named '" + assigned_task.name +  "' assigned to you."
+                              + ". Please complete the task before "
+                              + str(mongo_data.get("due_date")) + ".")
+                mailer.send(assigned.get('email'), "New Task Assigned to You", content=content)
+                manager = request.user
+                content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n" + "A New Task named " + assigned_task.name
+                              + " successfully assigned to " + assigned.get('username') + ". Task should be complete before "
+                              + str(mongo_data.get("due_date")) + ".")
+                mailer.send(assigned.get('email'), "You Assigned a New Task", content=content)
+
             return Response({"Success"}, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -541,6 +552,9 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
             serializer = self.serializer_class(data=data)
             if serializer.is_valid(raise_exception=True):
+                for field in serializer.validated_data.get("fields"):
+                    if not field.get("type") in allowed_field_types:
+                        return Response({"error": f"Field type {field.get('type')} not allowed"},status=status.HTTP_400_BAD_REQUEST)
                 task.update(**serializer.validated_data)
                 task.reload()  # Refresh the document with updated data
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -566,12 +580,34 @@ class FieldView(viewsets.ViewSet):
             if (task_id == "") or (field_id == ""):
                 return Response({"message": "Field id or task id not found"}, status=status.HTTP_400_BAD_REQUEST)
 
+            given_task_user = TaskUser.objects.get(task_id=task_id, user_id=request.user.id)
+
+            if given_task_user is None:
+                return Response({"message": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+
             file = File.objects.filter(task_id=task_id, field_id=field_id, user_id=request.user.id,
                                        is_updated=False).first()
 
             if file is None:
                 up_file = request.FILES['file']
                 represent_name, file_extension = os.path.splitext(up_file.name)
+                no_dot_file_extension = file_extension[1:]
+                found = False
+
+                for field in given_task_user.fields:
+                    if field.id == field_id:
+                        if field.type.startswith("file"):
+                            if "-" + no_dot_file_extension + "," in field.type or "-" + no_dot_file_extension + "." in field.type or  "," + no_dot_file_extension + "," in field.type or  "," + no_dot_file_extension + "." in field.type:
+                                found = True
+                            else:
+                                return Response("Field type is not supported for uploaded file type.",
+                                                status=status.HTTP_406_NOT_ACCEPTABLE)
+                        else:
+                            return Response("Field type not supported", status=status.HTTP_400_BAD_REQUEST)
+
+                if not found:
+                    return Response("Field not found", status=status.HTTP_404_NOT_FOUND)
+
                 name = str(uuid.uuid4()) + file_extension
                 destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
                 with open(destination_path, 'wb+') as destination:
@@ -617,6 +653,24 @@ class FieldView(viewsets.ViewSet):
             else:
                 up_file = request.FILES['file']
                 represent_name, file_extension = os.path.splitext(up_file.name)
+
+                no_dot_file_extension = file_extension[1:]
+                found = False
+
+                for field in given_task_user.fields:
+                    if field.id == field_id:
+                        if field.type.startswith("file"):
+                            if "-" + no_dot_file_extension + "," in field.type or "-" + no_dot_file_extension + "." in field.type or  "," + no_dot_file_extension + "," in field.type or  "," + no_dot_file_extension + "." in field.type:
+                                found = True
+                            else:
+                                return Response("Field type is not supported for uploaded file type.",
+                                                status=status.HTTP_406_NOT_ACCEPTABLE)
+                        else:
+                            return Response("Field type not supported", status=status.HTTP_400_BAD_REQUEST)
+
+                if not found:
+                    return Response("Field not found", status=status.HTTP_404_NOT_FOUND)
+
                 name = str(uuid.uuid4()) + file_extension
                 destination_path = os.path.join('/Users/yurdasenalpyeni/Desktop/techarts/insanise/backend/media/', name)
 

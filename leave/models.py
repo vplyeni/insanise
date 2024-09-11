@@ -1,5 +1,5 @@
 from django.db import models
-
+from datetime import datetime
 from company.models import Employee
 
 
@@ -7,14 +7,14 @@ from company.models import Employee
 
 
 class Leave(models.Model):
-    user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_requests')
-    manager_user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='manager_leave_requests')
+    user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_requests', blank=True, null=True)
+    manager_user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='manager_leave_requests', blank=True, null=True)
 
     start_date = models.DateField()
     end_date = models.DateField()
     description = models.TextField()
 
-    total_days = models.IntegerField()
+    total_days = models.IntegerField(default=0)
 
-    status = models.CharField(default=False)
+    status = models.CharField(default="")
 
