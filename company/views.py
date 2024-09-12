@@ -1,4 +1,9 @@
 # myapp/views.py
+import secrets
+import string
+
+from mailer import mailer
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets, status, permissions
@@ -219,7 +224,36 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     @action(methods=["POST"], detail=False)
     def create_employee(self, request, *args, **kwargs):
-        pass
+        # Generate a random password
+        password_length = 12
+        password_characters = string.ascii_letters + string.digits + string.punctuation
+        random_password = ''.join(secrets.choice(password_characters) for _ in range(password_length))
+
+        # Add the random password to the request data
+        data = request.data.copy()
+        data['password'] = random_password
+
+        # Create the employee
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+
+        # Return the created employee's data (excluding the password if needed)
+        response_data = serializer.data
+        response_data.pop('password', None)  # Remove password from response
+
+        print(random_password)
+
+        address = data['email']
+        header = "Your Insanise Account Has Been Created"
+        content = ("Dear " + data["first_name"] + ",\n \n"
+                   + "Your Insanise Account Has Been Created. \n \n"
+                   + "Your Password: " + random_password)
+
+        mailer.send(address, headerss, content)
+
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     """"
     def update(self, request, pk=None, *args, **kwargs):
