@@ -275,9 +275,12 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
         type = 0
 
+        full_name = ""
+
         try:
             skip = int(request.query_params.get('skip'))
             limit = int(request.query_params.get('limit'))
+            full_name = request.query_params.get('full_name', "")
         except Exception as e:
             print(e)
 
@@ -296,8 +299,8 @@ class ManagerTaskViewSet(viewsets.ViewSet):
 
                 return Response({'data': serialized_tasks.data, 'count': count}, status=status.HTTP_200_OK)
             elif type == 1:
-                tasks = TaskUser.objects(status="Complete")[skip:limit + skip]
-                count = TaskUser.objects(status="Complete").count()
+                tasks = TaskUser.objects(status="Complete", user_full_name__icontains=full_name)[skip:limit + skip]
+                count = TaskUser.objects(status="Complete", user_full_name__icontains=full_name).count()
 
                 serialized_tasks = TaskUserSerializer(tasks, many=True)
 
