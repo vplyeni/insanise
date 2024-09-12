@@ -57,7 +57,6 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
         return Response({'data': serialized_leaves.data, 'count': count}, status=status.HTTP_200_OK)
 
-
     def create(self, request, *args, **kwargs):
         user = request.user
         data = request.data
@@ -100,6 +99,9 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
         if serialized_leave.is_valid(raise_exception=True):
             serialized_leave.save()
+
+
+
             return Response(serialized_leave.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["POST"])
@@ -117,8 +119,9 @@ class LeaveViewSet(viewsets.ModelViewSet):
         leave = Leave.objects.get(id=approve_id)
         if leave is None:
             return Response({"error": "Leave does not exist"}, status=status.HTTP_400_BAD_REQUEST)
-        if leave.status == "Approved" or leave.status == "Declined" or leave.status == "Withdrawn":
-            return Response({"error": "Leave is already approved or declined or withdrawn"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if leave.status != "Requested":
+            return Response({"error": "Leave is not in Requested Status."}, status=status.HTTP_400_BAD_REQUEST)
 
         if leave.manager_user != request.user.id:
             return Response({"error": "You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)
@@ -126,7 +129,26 @@ class LeaveViewSet(viewsets.ModelViewSet):
         leave.status = "Approved"
         leave.save()
 
+        start_date = str(leave.start_date)
+        end_date = str(leave.end_date)
+
+        employee = leave.user
+        manager = leave.manager_user
+
+        content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
+                      + "Your manager " + manager.first_name + " " + manager.last_name
+                      + " has approved your leave.\n \n"
+                      + "Dates: " + str(start_date) + " - " + str(end_date))
+        mailer.send(employee.email, "Your Manager Has Approved your Leave", content)
+
+        content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
+                      + "You successfully approved leave for your employee "
+                      + employee.first_name + " " + employee.last_name + ".\n \n" + "Dates: "
+                      + str(start_date) + " - " + str(end_date))
+        mailer.send(manager.email, "You Approved a Leave for your Employee", content)
+
         return Response(leave, status=status.HTTP_200_OK)
+
     def decline_leave(self, request, *args, **kwargs):
         decline_id = self.request.query_params.get('approve', 0)
 
@@ -136,14 +158,33 @@ class LeaveViewSet(viewsets.ModelViewSet):
         leave = Leave.objects.get(id=decline_id)
         if leave is None:
             return Response({"error": "Leave does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+
         if leave.status == "Approved" or leave.status == "Declined" or leave.status == "Withdrawn":
             return Response({"error": "Leave is already approved or declined or withdrawn"}, status=status.HTTP_400_BAD_REQUEST)
 
         if leave.manager_user != request.user.id:
             return Response({"error": "You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)
 
-        leave.status = "decline"
+        leave.status = "Declined"
         leave.save()
+
+        start_date = str(leave.start_date)
+        end_date = str(leave.end_date)
+
+        employee = leave.user
+        manager = leave.manager_user
+
+        content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
+                      + "Your manager " + manager.first_name + " " + manager.last_name
+                      + " has declined your leave.\n \n"
+                      + "Dates: " + str(start_date) + " - " + str(end_date))
+        mailer.send(employee.email, "Your Manager Has Declined your Leave", content)
+
+        content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
+                      + "You successfully declined leave for your employee "
+                      + employee.first_name + " " + employee.last_name + ".\n \n" + "Dates: "
+                      + str(start_date) + " - " + str(end_date))
+        mailer.send(manager.email, "You Declined a Leave for your Employee", content)
 
         return Response(leave, status=status.HTTP_200_OK)
 
@@ -164,6 +205,25 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
         leave.status = "Withdrawn"
         leave.save()
+
+        employee = leave.user
+        manager = leave.manager_user
+
+        start_date = str(leave.start_date)
+        end_date = str(leave.end_date)
+
+        content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
+                      + "You successfully " + manager.first_name + " " + manager.last_name
+                      + " withdraw your leave.\n \n"
+                      + "Dates: " + str(start_date) + " - " + str(end_date))
+
+        mailer.send(employee.email, "Your Leave Request Successfully withdrawn", content)
+
+        content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
+                      + "Your employee" + employee.first_name + " " + employee.last_name
+                      + " withdraw their leave.\n \n" + "Dates: "
+                      + str(start_date) + " - " + str(end_date))
+        mailer.send(manager.email, "Your Employee Withdraw their Leave Request", content)
 
         return Response(leave, status=status.HTTP_200_OK)
 
@@ -223,7 +283,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
             mailer.send(employee.email, "Your Manager Has Offered a new Leave Date", content)
 
             content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
-                          + "You successfuly offered a new leave date for your employee "
+                          + "You successfully offered a new leave date for your employee "
                           + employee.first_name + " " + employee.last_name + ".\n \n" + "New Dates: "
                           + str(start_date) + " - " + str(end_date))
             mailer.send(manager.email, "You Offered a new Leave Date for your Employee", content)
@@ -234,6 +294,26 @@ class LeaveViewSet(viewsets.ModelViewSet):
             leave.start_date = start_date
             leave.end_date = end_date
             leave.save()
+
+            employee = leave.user
+            manager = leave.manager_user
+
+            content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
+                          + "You successfully requested a new leave date "
+                          + employee.first_name + " " + employee.last_name + ".\n \n" + "New Dates: "
+                          + str(start_date) + " - " + str(end_date))
+
+
+            mailer.send(employee.email, "You successfully Has Requested a new Leave Date", content)
+
+            content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
+                          + "Your employee " + manager.first_name + " " + manager.last_name
+                          + " has requested a new date for their leave.\n \n"
+                          + "New Dates: " + str(start_date) + " - " + str(end_date))
+
+            mailer.send(manager.email, "Your Employee Requested a new Leave Date", content)
+
+
             return Response(leave, status=status.HTTP_200_OK)
         else:
             return Response({"error":"You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)
