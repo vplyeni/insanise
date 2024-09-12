@@ -28,8 +28,9 @@ class LeaveViewSet(viewsets.ModelViewSet):
         ],
     )
     def list(self, request, *args, **kwargs):
-        skip = self.request.query_params.get('limit', 0)
-        limit = self.request.query_params.get('limit', 5)
+
+        skip = int(self.request.query_params.get('skip', 0))
+        limit = int(self.request.query_params.get('limit', 5))
 
         leaves = self.queryset.filter(user_id=request.user.id)[skip:limit + skip]
         count = self.queryset.filter(user_id=request.user.id).count()
@@ -47,24 +48,91 @@ class LeaveViewSet(viewsets.ModelViewSet):
         ],
     )
     def waiting_for_approve(self, request, *args, **kwargs):
-        skip = self.request.query_params.get('limit', 0)
-        limit = self.request.query_params.get('limit', 5)
+        skip = int(self.request.query_params.get('skip', 0))
+        limit = int(self.request.query_params.get('limit', 5))
 
-        leaves = self.queryset.filter(manager_user=request.user.id)[skip:limit + skip]
-        count = self.queryset.filter(manager_user=request.user.id).count()
+        leaves = self.queryset.filter(manager_user_id=request.user.id)[skip:limit + skip]
+        count = self.queryset.filter(manager_user_id=request.user.id).count()
 
         serialized_leaves = self.serializer_class(leaves, many=True)
 
         return Response({'data': serialized_leaves.data, 'count': count}, status=status.HTTP_200_OK)
+    
+    def destroy(self, request, pk=None, *args, **kwargs):
+        if pk is None:
+            return Response({"error": "Approval id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        leave = Leave.objects.get(id=pk)
+        if leave is None:
+            return Response({"error": "Leave does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if leave.status == "Approved" or leave.status == "Declined" or leave.status == "Withdrawn":
+            return Response({"error": "This leave request's status cannot be changed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if leave.manager_user_id == request.user.id:
+            leave.status = "Declined"
+            leave.save()
+
+            start_date = str(leave.start_date)
+            end_date = str(leave.end_date)
+
+            employee = leave.user
+            manager = leave.manager_user
+
+            content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
+                          + "Your manager " + manager.first_name + " " + manager.last_name
+                          + " has declined your leave.\n \n"
+                          + "Dates: " + str(start_date) + " - " + str(end_date))
+            mailer.send(employee.email, "Your Manager Has Declined your Leave", content)
+
+            content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
+                          + "You successfully declined leave for your employee "
+                          + employee.first_name + " " + employee.last_name + ".\n \n" + "Dates: "
+                          + str(start_date) + " - " + str(end_date))
+            mailer.send(manager.email, "You Declined a Leave for your Employee", content)
+
+            return Response("declined", status=status.HTTP_200_OK)
+        elif leave.user_id == request.user.id:
+            leave.status = "Withdrawn"
+            leave.save()
+
+            employee = leave.user
+            manager = leave.manager_user
+
+            start_date = str(leave.start_date)
+            end_date = str(leave.end_date)
+
+            content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
+                          + "You successfully " + manager.first_name + " " + manager.last_name
+                          + " withdraw your leave.\n \n"
+                          + "Dates: " + str(start_date) + " - " + str(end_date))
+
+            mailer.send(employee.email, "Your Leave Request Successfully withdrawn", content)
+
+            content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
+                          + "Your employee" + employee.first_name + " " + employee.last_name
+                          + " withdraw their leave.\n \n" + "Dates: "
+                          + str(start_date) + " - " + str(end_date))
+            mailer.send(manager.email, "Your Employee Withdraw their Leave Request", content)
+
+            return Response("withdrawn", status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+    def partial_update(self, request, *args, **kwargs):
+        return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+    def retrieve(self, request, *args, **kwargs):
+        return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
     def create(self, request, *args, **kwargs):
         user = request.user
         data = request.data
 
-        if not hasattr(data, 'start_date'):
+        if not "start_date" in data.keys():
             data["start_date"] = str(date.today() + timedelta(days=1))
 
-        if not hasattr(data, 'end_date'):
+        if not "end_date" in data.keys():
             data["end_date"] = str(date.today() + timedelta(days=2))
 
         date_format = "%Y-%m-%d"
@@ -90,40 +158,41 @@ class LeaveViewSet(viewsets.ModelViewSet):
         # Round up
         rounded_days = math.ceil(days_diff)
 
-        data['manager_user'] = user.manager_user.id
+        if user.manager_user is not None:
+            data['manager_user'] = user.manager_user.id
         data['user'] = user.id
         data['total_days'] = rounded_days
-        data['status'] = "Requested"
+        if user.manager_user is not None:
+            data['status'] = "Requested"
+        else:
+            data['status'] = "Approved"
 
         serialized_leave = self.serializer_class(data=request.data)
 
         if serialized_leave.is_valid(raise_exception=True):
             serialized_leave.save()
-
-
-
             return Response(serialized_leave.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["POST"])
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='approve', description='Number of items to skip', required=True, type=OpenApiTypes.INT),
+            OpenApiParameter(name='leave_id', required=True, type=OpenApiTypes.INT),
         ],
     )
-    def approve_leave(self, request, *args, **kwargs):
-        approve_id = self.request.query_params.get('approve', 0)
+    def approve(self, request, *args, **kwargs):
+        leave_id = int(self.request.query_params.get('leave_id', 0))
 
-        if approve_id == 0:
+        if leave_id == 0:
             return Response({"error": "Approval id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        leave = Leave.objects.get(id=approve_id)
+        leave = Leave.objects.get(id=leave_id)
         if leave is None:
             return Response({"error": "Leave does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
         if leave.status != "Requested":
             return Response({"error": "Leave is not in Requested Status."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if leave.manager_user != request.user.id:
+        if leave.manager_user_id != request.user.id:
             return Response({"error": "You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)
 
         leave.status = "Approved"
@@ -147,85 +216,8 @@ class LeaveViewSet(viewsets.ModelViewSet):
                       + str(start_date) + " - " + str(end_date))
         mailer.send(manager.email, "You Approved a Leave for your Employee", content)
 
-        return Response(leave, status=status.HTTP_200_OK)
+        return Response("approved", status=status.HTTP_200_OK)
 
-    def decline_leave(self, request, *args, **kwargs):
-        decline_id = self.request.query_params.get('approve', 0)
-
-        if decline_id == 0:
-            return Response({"error": "Approval id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        leave = Leave.objects.get(id=decline_id)
-        if leave is None:
-            return Response({"error": "Leave does not exist"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if leave.status == "Approved" or leave.status == "Declined" or leave.status == "Withdrawn":
-            return Response({"error": "Leave is already approved or declined or withdrawn"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if leave.manager_user != request.user.id:
-            return Response({"error": "You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)
-
-        leave.status = "Declined"
-        leave.save()
-
-        start_date = str(leave.start_date)
-        end_date = str(leave.end_date)
-
-        employee = leave.user
-        manager = leave.manager_user
-
-        content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
-                      + "Your manager " + manager.first_name + " " + manager.last_name
-                      + " has declined your leave.\n \n"
-                      + "Dates: " + str(start_date) + " - " + str(end_date))
-        mailer.send(employee.email, "Your Manager Has Declined your Leave", content)
-
-        content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
-                      + "You successfully declined leave for your employee "
-                      + employee.first_name + " " + employee.last_name + ".\n \n" + "Dates: "
-                      + str(start_date) + " - " + str(end_date))
-        mailer.send(manager.email, "You Declined a Leave for your Employee", content)
-
-        return Response(leave, status=status.HTTP_200_OK)
-
-    def withdraw_leave(self, request, *args, **kwargs):
-        withdraw_id = self.request.query_params.get('approve', 0)
-
-        if withdraw_id == 0:
-            return Response({"error": "Approval id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        leave = Leave.objects.get(id=withdraw_id)
-        if leave is None:
-            return Response({"error": "Leave does not exist"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if leave.manager_user != request.user.id:
-            return Response({"error": "You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)
-        if leave.status == "Approved" or leave.status == "Declined" or leave.status == "Withdrawn":
-            return Response({"error": "Leave is already approved or declined or withdrawn"}, status=status.HTTP_400_BAD_REQUEST)
-
-        leave.status = "Withdrawn"
-        leave.save()
-
-        employee = leave.user
-        manager = leave.manager_user
-
-        start_date = str(leave.start_date)
-        end_date = str(leave.end_date)
-
-        content = str('Dear ' + employee.first_name + " " + employee.last_name + ",\n \n"
-                      + "You successfully " + manager.first_name + " " + manager.last_name
-                      + " withdraw your leave.\n \n"
-                      + "Dates: " + str(start_date) + " - " + str(end_date))
-
-        mailer.send(employee.email, "Your Leave Request Successfully withdrawn", content)
-
-        content = str('Dear ' + manager.first_name + " " + manager.last_name + ",\n \n"
-                      + "Your employee" + employee.first_name + " " + employee.last_name
-                      + " withdraw their leave.\n \n" + "Dates: "
-                      + str(start_date) + " - " + str(end_date))
-        mailer.send(manager.email, "Your Employee Withdraw their Leave Request", content)
-
-        return Response(leave, status=status.HTTP_200_OK)
 
     def update(self, request, pk=None, *args, **kwargs):
         user = request.user
@@ -293,6 +285,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
             leave.status = "Requested"
             leave.start_date = start_date
             leave.end_date = end_date
+            leave.description = request.data['description']
             leave.save()
 
             employee = leave.user
@@ -314,6 +307,6 @@ class LeaveViewSet(viewsets.ModelViewSet):
             mailer.send(manager.email, "Your Employee Requested a new Leave Date", content)
 
 
-            return Response(leave, status=status.HTTP_200_OK)
+            return Response({"requested"}, status=status.HTTP_200_OK)
         else:
             return Response({"error":"You do not have permission to approve leave"}, status=status.HTTP_400_BAD_REQUEST)

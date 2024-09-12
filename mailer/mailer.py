@@ -5,7 +5,7 @@ from backend import settings
 
 def send(to_addr, subject, content):
     context = {}
-
+    """ 
     if to_addr and subject and content:
         try:
             send_mail(subject=subject, message=content, from_email=settings.EMAIL_HOST, recipient_list=[to_addr])
@@ -14,5 +14,5 @@ def send(to_addr, subject, content):
             context['message'] = f'Error sending email: {e}'
     else:
         context['message'] = 'All fields are required'
-
+    """
     return context

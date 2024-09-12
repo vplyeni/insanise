@@ -86,6 +86,8 @@ class Employee(AbstractUser):
 
     is_manager = models.BooleanField(default=False)
 
+    is_lead = models.BooleanField(default=False)
+
     leave_manager = models.ForeignKey('self', on_delete=models.SET_NULL, related_name='managed_employees', null=True,
                                       blank=True)
     manager_user = models.ForeignKey('self', on_delete=models.SET_NULL, related_name='direct_reports', null=True,
