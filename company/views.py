@@ -22,6 +22,16 @@ class TargetGroupViewSet(viewsets.ModelViewSet):
     serializer_class = TargetGroupSerializer
     permission_classes = [permissions.IsAuthenticated, IsManager]
 
+    # Custom create method
+    def create(self, request, *args, **kwargs):
+        request.data["company"] = request.user.company_id
+        serializer = self.get_serializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def list(self, request, *args, **kwargs):
         skip = 0
         limit = 5
@@ -33,12 +43,31 @@ class TargetGroupViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(e)
 
-        target_groups = self.queryset.all().order_by('id')[skip:skip + limit]
+        target_groups = self.queryset.all().filter(company_id=request.user.company_id).order_by('id')[skip:skip + limit]
         count = self.queryset.all().count()
 
         target_groups = self.serializer_class(target_groups, many=True)
 
         return Response({"data": target_groups.data, "count": count}, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        request.data["company"] = request.user.company_id
+        instance = self.get_object()
+
+        if instance.company_id != request.user.company_id:
+            return Response({"error": "You cannot update the company yourself!"}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(instance, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -46,6 +75,15 @@ class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
     permission_classes = [permissions.IsAuthenticated, IsManager]
 
+    def create(self, request, *args, **kwargs):
+        request.data["company"] = request.user.company_id
+        serializer = self.get_serializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def list(self, request, *args, **kwargs):
         skip = 0
         limit = 5
@@ -57,12 +95,32 @@ class TeamViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(e)
 
-        teams = self.queryset.all().order_by('id')[skip:skip + limit]
+        target_groups = self.queryset.all().filter(company_id=request.user.company_id).order_by('id')[skip:skip + limit]
         count = self.queryset.all().count()
 
-        teams_serializer = self.serializer_class(teams, many=True)
+        target_groups = self.serializer_class(target_groups, many=True)
 
-        return Response({"data": teams_serializer.data, "count": count}, status=status.HTTP_200_OK)
+        return Response({"data": target_groups.data, "count": count}, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        request.data["company"] = request.user.company_id
+        instance = self.get_object()
+
+        if instance.company_id != request.user.company_id:
+            return Response({"error": "You cannot update the company yourself!"}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(instance, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        request.data["company"] = request.user.company_id
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
