@@ -222,9 +222,37 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        existing_password = instance.password
+
+        data = request.data.copy()
+        if 'password' in data:
+            data.pop('password')
+
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        instance.password = existing_password
+        instance.save()
+
+        response_data = serializer.data
+        response_data.pop('password', None)
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response("Deleted", status=status.HTTP_204_NO_CONTENT)
+
     @action(methods=["POST"], detail=False)
     def create_employee(self, request, *args, **kwargs):
         # Generate a random password
+        request.data["company"] = request.user.company_id
+        request.data["is_superuser"] = False
+
         password_length = 12
         password_characters = string.ascii_letters + string.digits + string.punctuation
         random_password = ''.join(secrets.choice(password_characters) for _ in range(password_length))
@@ -249,9 +277,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         header = "Your Insanise Account Has Been Created"
         content = ("Dear " + data["first_name"] + ",\n \n"
                    + "Your Insanise Account Has Been Created. \n \n"
-                   + "Your Password: " + random_password)
+                   + "Your Username: " + data["username"] + " and Password: " + random_password)
 
-        mailer.send(address, headerss, content)
+        mailer.send(address, header, content)
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -271,12 +299,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)"""
-
-    def destroy(self, request, pk=None, *args, **kwargs):
-        try:
-            employee = self.get_object()
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(methods=["POST"], detail=False)
     def get_employee_by_id_list(self, request, *args, **kwargs):
