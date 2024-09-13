@@ -2,6 +2,10 @@
 import secrets
 import string
 
+from django.db.models import Sum
+
+from harmonise.mongo_models import TaskUser
+from leave.models import Leave
 from mailer import mailer
 
 from drf_spectacular.types import OpenApiTypes
@@ -282,6 +286,21 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         mailer.send(address, header, content)
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(methods=["GET"], detail=False)
+    def task_count(self, request, *args, **kwargs):
+        total_task_count = TaskUser.objects(user_id=str(request.user.id)).count()
+        complete_task_count = TaskUser.objects(user_id=str(request.user.id), status="Complete").count()
+        return Response([{"name": "Not Completed Task Count", "value": total_task_count-complete_task_count},
+                         {"name": "Completed Task Count", "value": complete_task_count}],
+                        status.HTTP_200_OK)
+
+    @action(methods=["GET"], detail=False)
+    def leave_days(self, request, *args, **kwargs):
+        leave_days = Leave.objects.filter(user_id=request.user.id).values('status').annotate(total_days=Sum('total_days'))
+        return Response(leave_days,
+                        status.HTTP_200_OK)
+
 
     """"
     def update(self, request, pk=None, *args, **kwargs):
