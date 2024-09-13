@@ -287,7 +287,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
-    @action(methods=["GET"], detail=False)
+    @action(methods=["GET"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def task_count(self, request, *args, **kwargs):
         total_task_count = TaskUser.objects(user_id=str(request.user.id)).count()
         complete_task_count = TaskUser.objects(user_id=str(request.user.id), status="Complete").count()
@@ -295,7 +295,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                          {"name": "Completed Task Count", "value": complete_task_count}],
                         status.HTTP_200_OK)
 
-    @action(methods=["GET"], detail=False)
+    @action(methods=["GET"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def leave_days(self, request, *args, **kwargs):
         leave_days = Leave.objects.filter(user_id=request.user.id).values('status').annotate(total_days=Sum('total_days'))
         return Response(leave_days,
